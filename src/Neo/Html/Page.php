@@ -13,30 +13,6 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 class Page
 {
     /**
-     * 生成URL，参数可以是数组
-     *
-     * @param null|string $uri
-     * @param bool        $and 使用&拼接URL参数
-     *
-     * @return string
-     */
-    public static function baseURL(?string $uri = null, bool $and = false)
-    {
-        if ($and) {
-            if (is_array($uri)) {
-                $uri = http_build_query($uri);
-            }
-            $uri = '?' . $uri;
-        } else {
-            if (is_array($uri)) {
-                $uri = implode('/', $uri);
-            }
-        }
-
-        return '/' . ltrim($uri, '/');
-    }
-
-    /**
      * 跳转页面到指定的URL，缺省是跳转到首页
      *
      * @param string $url          指定的URL
@@ -65,35 +41,60 @@ class Page
         }
 
         // 跳转时，添加一个随机数
-        if (defined('REDIRECT_WITH_RANDOM') && REDIRECT_WITH_RANDOM) {
-            $sc = parse_url($url);
-            $scs = [$sc['scheme'], '://', $sc['host']];
-            if ($sc['path']) {
-                $scs[] = $sc['path'];
-            }
-            $scs[] = '?_=';
-            $scs[] = Str::randString(12, 0, true);
-            if ($sc['query']) {
-                $scs[] = '&';
-                $scs[] = $sc['query'];
-            }
-            if ($sc['fragment']) {
-                $scs[] = '#';
-                $scs[] = $sc['fragment'];
-            }
-
-            $url = implode('', $scs);
-            unset($sc, $scs);
-        }
-
+        $addRandStr = defined('REDIRECT_WITH_RANDOM') && REDIRECT_WITH_RANDOM;
         // 用于翻页后的跳转
         $backpage = (int) Cookie::get('backpage');
-        if ($backpage > 1 && (strpos($url, '?p=') === false || strpos($url, '&p=') === false)) {
-            $url .= (strpos($url, '?') === false) ? '?p=' . $backpage : '&p=' . $backpage;
+
+        if ($addRandStr || $backpage > 1) {
+            $sc = parse_url($url);
+            $url = '';
+
+            if (isset($sc['scheme'])) {
+                $url .= $sc['scheme'] . '://';
+            }
+            if (isset($sc['user'])) {
+                $url .= $sc['user'];
+
+                if (isset($sc['pass'])) {
+                    $url .= ':' . $sc['pass'];
+                }
+                $url .= '@';
+            }
+            if (isset($sc['host'])) {
+                $url .= $sc['host'];
+
+                if (isset($sc['port'])) {
+                    $url .= ':' . $sc['port'];
+                }
+            }
+            if (isset($sc['path'])) {
+                $url .= $sc['path'];
+            }
+
+            $query = [];
+            if (isset($sc['query'])) {
+                parse_str($sc['query'], $query);
+            }
+            // 跳转时，添加一个随机数
+            if ($addRandStr) {
+                $query['_'] = Str::randString(12, 0, true);
+            }
+            // 用于翻页后的跳转
+            if ($backpage > 1 && ! isset($query['p'])) {
+                $query['p'] = $backpage;
+            }
+
+            if ($query) {
+                $url .= '?' . http_build_query($query);
+            }
+
+            if (isset($sc['fragment'])) {
+                $url .= '#' . $sc['fragment'];
+            }
         }
 
         if (empty($message)) {
-            (new RedirectResponse($url, 302, neo()->response->headers->all()))->prepare(neo()->request)->send();
+            (new RedirectResponse($url, 302, neo()->getResponse()->headers->all()))->prepare(neo()->getRequest())->send();
 
             // 不用byebye
             unload();
@@ -109,16 +110,6 @@ class Page
 
             static::displaySimpleErrorPage($message, $title, $extension);
         }
-    }
-
-    /**
-     * JS方式跳转
-     *
-     * @param string $url 待跳转的URL
-     */
-    public static function jsRedirect(string $url)
-    {
-        echo "<script type=\"\">location.href='{$url}'</script>";
     }
 
     /**
@@ -191,7 +182,7 @@ class Page
 
         if (file_exists($page)) {
             getUserDefinedVars(get_defined_vars());
-            Template::loadTemplate($page);
+            neo()->getTemplate()->loadTemplateFile($page);
 
             $message = null;
         }

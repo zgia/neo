@@ -10,29 +10,29 @@ use Neo\Exception\NeoException;
 class Debug
 {
     /**
-     * 记录API调用日志
+     * 记录Http Request 和 Response
      *
-     * @param array $ouput
+     * @param null|array|string $request
+     * @param null|array|string $response
      */
-    public static function logApi(array $ouput)
+    public static function logHttpContent($request = null, $response = null)
     {
         $neo = neo();
 
-        if ($neo['log_api_request']) {
-            $request['db_slave'] = $neo['dbSlaveIndex'];
+        if ($neo['log_http_request']) {
+            if (! is_array($request)) {
+                $request = (array) $request;
+            }
+            $request['db_slave'] = $neo->getDB()->getSlaveIndex();
             $request['execution_time'] = number_format(getExecutionTime(), 3);
-            $request['request'] = (string) neo()->request;
+            $request['http_request'] = (string) neo()->getRequest();
 
-            NeoLog::info('api', 'request', $request);
-
-            unset($request);
+            NeoLog::info('http', 'request', $request);
         }
 
-        if ($neo['log_api_response']) {
-            NeoLog::info('api', 'response', $ouput);
+        if ($neo['log_http_response']) {
+            NeoLog::info('http', 'response', $response);
         }
-
-        unset($ouput);
     }
 
     /**
@@ -94,7 +94,10 @@ class Debug
     {
         $func = $trace['class'] . $trace['type'] . $trace['function'];
 
-        return removeSystemPathFromFileName("{$trace['file']}({$trace['line']}): {$func}(" . implode(', ', $trace['args']) . ')');
+        return removeSysPath("{$trace['file']}({$trace['line']}): {$func}(" . implode(
+            ', ',
+            $trace['args']
+        ) . ')');
     }
 
     /**
@@ -108,7 +111,7 @@ class Debug
             return [];
         }
 
-        $traces = explode("\n", removeSystemPathFromFileName($ex->getTraceAsString()));
+        $traces = explode("\n", removeSysPath($ex->getTraceAsString()));
 
         $data = [
             'message' => $ex->getMessage(),

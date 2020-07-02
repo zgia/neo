@@ -2,8 +2,11 @@
 
 namespace Neo\Database;
 
+use Doctrine\DBAL\Connection as DoctrineConnection;
+use Doctrine\DBAL\DBALException;
+use Doctrine\DBAL\Driver\ResultStatement;
+use Doctrine\DBAL\ParameterType;
 use Neo\Exception\DatabaseException;
-use Neo\Http\Request;
 use Neo\NeoLog;
 
 /**
@@ -19,32 +22,11 @@ abstract class NeoDatabase
     protected $config;
 
     /**
-     * 数据库连接
-     *
-     * @var null
-     */
-    protected $connection;
-
-    /**
      * 查询语句
      *
      * @var string
      */
     protected $sql = '';
-
-    /**
-     * 数据库错误信息
-     *
-     * @var string
-     */
-    protected $error = '';
-
-    /**
-     * 数据库错误码
-     *
-     * @var int
-     */
-    protected $errno = '';
 
     /**
      * 某次请求的查询次数
@@ -61,6 +43,20 @@ abstract class NeoDatabase
     protected $queryarray = [];
 
     /**
+     * The parameters to bind to the query
+     *
+     * @var array
+     */
+    protected $binds = [];
+
+    /**
+     * The types of parameters to bind to the query
+     *
+     * @var array
+     */
+    protected $bindTypes = [];
+
+    /**
      * 表的前缀
      * @var string
      */
@@ -73,13 +69,6 @@ abstract class NeoDatabase
     protected $trans = false;
 
     /**
-     * 常驻内存
-     *
-     * @var bool
-     */
-    protected $memory_resident = false;
-
-    /**
      * 是够强制走主库
      *
      * @var bool
@@ -87,18 +76,11 @@ abstract class NeoDatabase
     protected $fromMaster = false;
 
     /**
-     * 使用数据库前端代理
+     * 使用哪个从库
      *
-     * @var bool
+     * @var int
      */
-    protected $use_db_proxy = false;
-
-    /**
-     * NeoDatabase constructor
-     */
-    public function __construct()
-    {
-    }
+    protected $slaveIndex = 0;
 
     /**
      * 返回数据库配置
@@ -111,15 +93,90 @@ abstract class NeoDatabase
     }
 
     /**
-     * 连接到一个数据库
+     * 解析数据库配置，以便支持Doctrine
      *
-     * @param array $config Database config
+     * @param array $config
+     *
+     * @return array
      */
-    public function connect(array $config)
+    public function parseConfig(array $config)
     {
         $config['port'] || $config['port'] = 3306;
 
+        $this->setTablePrefix($config['prefix']);
+
+        /*
+         * Master-Slave Connection
+         *
+         * $conn = DriverManager::getConnection(array(
+         *    'wrapperClass' => 'Doctrine\DBAL\Connections\MasterSlaveConnection',
+         *    'driver' => 'pdo_mysql',
+         *    'master' => array('user' => '', 'password' => '', 'host' => '', 'dbname' => ''),
+         *    'slaves' => array(
+         *        array('user' => 'slave1', 'password', 'host' => '', 'dbname' => ''),
+         *        array('user' => 'slave2', 'password', 'host' => '', 'dbname' => ''),
+         *    )
+         * ));
+         *
+         */
+        $config['master'] = array_merge($config['master'], $config['base']);
+
+        if ($config['withSlave'] && ! empty($config['slaves']) && is_array($config['slaves'])) {
+            $slaveCount = count($config['slaves']);
+            // ip不变，从库不变
+            $this->slaveIndex = $slaveCount > 1 ? ord(md5(neo()->getRequest()->getClientIp())[0]) % $slaveCount : 0;
+
+            $config['slaves'] = [array_merge($config['slaves'][$this->slaveIndex], $config['base'])];
+            $config['wrapperClass'] = 'Doctrine\DBAL\Connections\MasterSlaveConnection';
+        } else {
+            unset($config['slaves']);
+        }
+
+        unset($config['base'], $config['withSlave'], $config['prefix']);
+
         $this->config = $config;
+
+        return $config;
+    }
+
+    /**
+     * 从PDOStatement::debugDumpParams中解析出SQL
+     *
+     * @param ResultStatement $stmt
+     *
+     * @return string
+     */
+    public function getSQLFromDebugDumpParams(ResultStatement $stmt)
+    {
+        ob_start();
+        $stmt->debugDumpParams();
+        $dump = ob_get_contents();
+        ob_end_clean();
+
+        // prepare后，无需绑定变量，则debugDumpParams返回的数据中不存在Sent SQL
+        // SQL [22] ...
+        // Sent SQL [22] ...
+        $ma = [];
+        preg_match_all('/(Sent )?SQL\: \[(\d+)\] /', $dump, $ma);
+
+        $length = $ma[2][1] ?? $ma[2][0];
+        if (! $length) {
+            return '';
+        }
+
+        $flag = $ma[0][1] ?? $ma[0][0];
+
+        return trim(substr($dump, stripos($dump, $flag) + strlen($flag), $length));
+    }
+
+    /**
+     * 使用哪个从库
+     *
+     * @return int
+     */
+    public function getSlaveIndex()
+    {
+        return $this->slaveIndex;
     }
 
     /**
@@ -127,16 +184,50 @@ abstract class NeoDatabase
      *
      * @param array $config Database config
      *
-     * @return bool
+     * @throws DBALException
+     * @return bool|DoctrineConnection
      */
-    abstract protected function getConnection(array $config);
+    abstract public function getConnection(array $config);
+
+    /**
+     * 执行 INSERT INTO 语句
+     *
+     * @param string $table   Name of the table into which data should be inserted
+     * @param array  $data    Array of SQL values
+     * @param bool   $replace INSERT or REPLACE
+     *
+     * @return int
+     */
+    abstract public function insert(string $table, array $data, bool $replace = false);
+
+    /**
+     * 执行 UPDATE 语句
+     *
+     * @param string $table
+     * @param array  $data
+     * @param array  $conditions
+     *
+     * @return int the number of affected rows
+     */
+    abstract public function update(string $table, array $data, ?array $conditions = null);
+
+    /**
+     * 执行 DELETE 语句
+     *
+     * @param string $table
+     * @param array  $conditions
+     *
+     * @throws DatabaseException
+     * @return int               the number of affected rows
+     */
+    abstract public function delete(string $table, array $conditions);
 
     /**
      * 在主数据库上执行的"写"操作，比如：insert，update，delete等等
      *
      * @param string $sql The text of the SQL query to be executed
      *
-     * @return string
+     * @return int
      */
     abstract public function write(string $sql);
 
@@ -145,24 +236,9 @@ abstract class NeoDatabase
      *
      * @param string $sql The text of the SQL query to be executed
      *
-     * @return string
+     * @return ResultStatement
      */
     abstract public function read(string $sql);
-
-    /**
-     * 在主数据库上开启事务
-     */
-    abstract public function beginTransaction();
-
-    /**
-     * 在主数据库上回滚事务
-     */
-    abstract public function rollBack();
-
-    /**
-     * 在主数据库上提交事务
-     */
-    abstract public function commit();
 
     /**
      * 查询一条记录，返回关联数组格式
@@ -172,7 +248,7 @@ abstract class NeoDatabase
      * @throws DatabaseException
      * @return array
      */
-    abstract public function first(string $sql);
+    abstract public function fetchRow(string $sql);
 
     /**
      * 查询一个值，比如返回某张表的行数
@@ -182,7 +258,7 @@ abstract class NeoDatabase
      * @throws DatabaseException
      * @return false|mixed
      */
-    abstract public function single(string $sql);
+    abstract public function fetchOne(string $sql);
 
     /**
      * 查询多条记录，返回关联数组
@@ -193,206 +269,7 @@ abstract class NeoDatabase
      *
      * @return array
      */
-    abstract public function fetchArray(string $sql, string $element = null, string $key = null);
-
-    /**
-     * 返回某次查询的记录条数
-     *
-     * @param mixed $result The query result ID we are dealing with
-     *
-     * @return int
-     */
-    abstract public function numRows($result);
-
-    /**
-     * 返回"写"操作：INSERT, UPDATE, REPLACE, DELETE 的影响行数
-     *
-     * 大于0的整数：影响行数
-     * 0：根据条件没有更新到数据，或者语句没有执行
-     * -1：出错了
-     *
-     * @see https://secure.php.net/manual/en/mysqli.affected-rows.php
-     *
-     * @return int
-     */
-    abstract public function affectedRows();
-
-    /**
-     * 有自增字段的表的最后一次插入数据后的自增ID
-     *
-     * @return int
-     */
-    abstract public function insertId();
-
-    /**
-     * 释放查询结果
-     *
-     * @param mixed $result The query result
-     */
-    abstract public function freeResult($result);
-
-    /**
-     * 返回表结构
-     *
-     * @param string $table Table name
-     *
-     * @return array Fields in table. Keys are name and values are type
-     */
-    abstract public function describe(string $table);
-
-    /**
-     * 返回创建表的语句
-     *
-     * @param string $table Table name
-     *
-     * @return string Create table sql
-     */
-    abstract public function showCreateTable(string $table);
-
-    /**
-     * 返回数据库错误信息
-     *
-     * @return string
-     */
-    abstract public function getError();
-
-    /**
-     * 返回数据库错误码
-     *
-     * @return int
-     */
-    abstract public function getErrno();
-
-    /**
-     * 移除表名中不符合的字符
-     *
-     * @param string $table
-     *
-     * @return string
-     */
-    public function cleanTableName(string $table)
-    {
-        return preg_replace('/[^a-zA-Z0-9_-]/', '', $table);
-    }
-
-    /**
-     * 抛出数据库异常
-     *
-     * @param DatabaseException $ex Exception
-     *
-     * @throws DatabaseException
-     */
-    public function halt(DatabaseException $ex)
-    {
-        $errortext = preg_replace('/[\r\n]/', ' ', $this->sql);
-
-        $this->sql = '';
-
-        // 记录到日志
-        $dberr = self::generateErrorData($ex->getMessage(), $ex->getCode());
-        $dberr['SQL'] = $errortext;
-        NeoLog::error('db', 'InvalidSQL', $dberr);
-
-        $this->rollback();
-
-        // 抛出
-        $ex->setMore($dberr);
-
-        throw $ex;
-    }
-
-    /**
-     * 生成数据库错误信息数组
-     *
-     * @param string $error
-     * @param int    $errno
-     *
-     * @return array
-     */
-    public static function generateErrorData(string $error, int $errno)
-    {
-        return [
-            'error' => $error,
-            'errno' => $errno,
-            'time' => formatLongDate(),
-            'script' => html_entity_decode(Request::uri()),
-            'referer' => Request::referer(),
-            'ip' => Request::ip(),
-        ];
-    }
-
-    /**
-     *  批量插入
-     *
-     * @param string $table   Name of the table into which data should be inserted
-     * @param array  $data    Array of SQL values
-     * @param bool   $replace INSERT or REPLACE
-     * @param int    $limit
-     *
-     * @return bool|int
-     */
-    public function batchInsert(string $table, array $data, bool $replace = false, int $limit = 20)
-    {
-        if (! $data) {
-            return false;
-        }
-
-        // 获取表插入field，防止分批写入多次获取
-        $fields = array_keys(current($data));
-        if (! is_array($fields)) {
-            return false;
-        }
-
-        $action = $replace ? 'REPLACE' : 'INSERT';
-
-        $sqlPre = "{$action} INTO {$this->getTablePrefix()} {$table}" . ' (' . implode(',', $fields) . ') VALUES ';
-
-        if (! $limit || count($data) <= $limit) {
-            return $this->doBatchInsert($sqlPre, $data);
-        }
-
-        $affectedRows = 0;
-        $array = array_chunk($data, $limit, true);
-        foreach ($array as $i => $item) {
-            $affectedRows += $this->doBatchInsert($sqlPre, $item);
-        }
-
-        return $affectedRows;
-    }
-
-    /**
-     * 保存批量插入
-     *
-     * @param string $sql  Sql INSERT | UPDATE
-     * @param array  $data
-     *
-     * @return int
-     */
-    protected function doBatchInsert(string $sql, array $data)
-    {
-        $sql = $sql . $this->batchAssignmentSQL($sql, $data);
-
-        return $this->write($sql);
-    }
-
-    /**
-     * 数组转换为批量表字段赋值
-     *
-     * @param string $sqlPre 前置Sql
-     * @param array  $arr
-     *
-     * @return string
-     */
-    abstract public function batchAssignmentSQL(string $sqlPre, array $arr);
-
-    /**
-     * 数组转换为表字段赋值
-     *
-     * @param array $arr
-     *
-     * @return string
-     */
-    abstract public function assignmentSQL(array $arr);
+    abstract public function fetchArray(string $sql, ?string $element = null, ?string $key = null);
 
     /**
      * 根据条件生成SQL
@@ -436,6 +313,18 @@ abstract class NeoDatabase
      *
      * JOIN == CROSS JOIN == INNER JOIN，同义词。这里只使用 INNER JOIN
      *
+     * $conditions = array(
+     *      'FIELD'            => 'abc',
+     *      0                  => "FIELD [NOT ]LIKE 'def%'",
+     *      1                  => 'FIELD =|<>|!=| >|<|>=|<= 123',
+     *      2                  => 'FIELD IS NULL',,
+     *      3                  => 'FIELD = FIELD + 1',
+     *      'FIELD [NOT ]LIKE' => 'abc%',
+     *      'FIELD [NOT ]IN'   => '1,3,4,5',
+     *      'FIELD [NOT ]IN'   => [1,3,4,5],
+     *      'FIELD BETWEEN'    => [1,3],
+     * )
+     *
      * @param array $conditions 条件
      * @param array $more       ORDER BY, LIMIT, GROUP BY 等等
      * @param array $ret        指定返回的数组元素
@@ -460,7 +349,20 @@ abstract class NeoDatabase
         }
 
         // FROM 字句
-        $from = $this->getTablePrefix() . $more['from'];
+        $from = $this->tableName($more['from']);
+
+        // JOIN 字句
+        $joined = '';
+        $actions = ['left', 'left outer', 'inner', 'straight'];
+
+        // 按照$more里面的顺序输出
+        foreach (array_intersect(array_keys($more), $actions) as $j) {
+            $act = $j === 'straight' ? 'STRAIGHT_JOIN' : strtoupper($j) . ' JOIN ';
+
+            foreach ((array) $more[$j] as $table) {
+                $joined .= ' ' . $act . $this->tableName($table);
+            }
+        }
 
         // 分区
         $partition = $more['partition'] ? "PARTITION {$more['partition']}" : '';
@@ -479,7 +381,7 @@ abstract class NeoDatabase
 
         // LIMIT 字句
         $limit = '';
-        if (isset($more['limit'])) {
+        if (! empty($more['limit'])) {
             if (is_array($more['limit'])) {
                 $more['offset'] = (int) $more['limit'][0];
                 $more['perpage'] = (int) $more['limit'][1];
@@ -487,20 +389,8 @@ abstract class NeoDatabase
 
                 $limit = $more['offset'] < 0 ? '' : "LIMIT {$more['offset']}, {$more['perpage']}";
             } else {
+                $more['limit'] = (int) $more['limit'];
                 $limit = $more['limit'] ? "LIMIT {$more['limit']}" : '';
-            }
-        }
-
-        // JOIN 字句
-        $joined = '';
-        $actions = ['left', 'left outer', 'inner', 'straight'];
-
-        // 按照$more里面的顺序输出
-        foreach (array_intersect(array_keys($more), $actions) as $j) {
-            $act = $j === 'straight' ? 'STRAIGHT_JOIN' : strtoupper($j) . ' JOIN ';
-
-            foreach ((array) $more[$j] as $table) {
-                $joined .= ' ' . $act . $this->getTablePrefix() . $table;
             }
         }
 
@@ -510,27 +400,219 @@ abstract class NeoDatabase
     /**
      * 生成WHERE字句
      *
-     * @param array  $arr
+     * @param array  $conditions
      * @param string $glue
-     * @param bool   $where
+     * @param bool   $withWhere
      *
      * @return string
      */
-    abstract public function where(?array $arr = null, string $glue = 'AND', bool $where = true);
+    public function where(?array $conditions = null, string $glue = 'AND', bool $withWhere = true)
+    {
+        if (! $conditions || ! is_array($conditions)) {
+            return '';
+        }
+
+        $sql = [];
+
+        foreach ($conditions as $key => $value) {
+            $op = $this->getOperator($key);
+
+            if ($op) {
+                $key = trim(str_replace($op, '', $key));
+                $op = strtoupper($op);
+            }
+
+            // NULL 特殊处理
+            if ($op === 'IS NULL' || $op === 'IS NOT NULL') {
+                $sql[] = "{$key} {$op}";
+
+                continue;
+            }
+
+            if (is_array($value)) {
+                if ($op === 'BETWEEN') {
+                    $sql[] = "{$key} {$op} ? AND ?";
+
+                    $this->bindValue($value[0]);
+                    $this->bindValue($value[1]);
+                } else {
+                    $op || $op = 'IN';
+
+                    $sql[] = "{$key} {$op} (?)";
+
+                    $this->bindValue($value);
+                }
+            } else {
+                // 如果$key是数字，则表示条件中含有"<>, !="等非等号(=)的判断
+                // 比如： array('invalid' => 0, '1' => "image <> ''")
+                // 这里的转义处理稍微复杂，如果需要转义，请在$conditions传值之前处理。
+                if (is_numeric($key)) {
+                    // 不进行转义处理
+                    $sql[] = $value;
+                } else {
+                    if ($op === 'IN' || $op === 'NOT IN' || $op === 'EXISTS' || $op === 'NOT EXISTS') {
+                        $sql[] = "{$key} {$op} (?)";
+                    } elseif ($op === 'LIKE' || $op === 'NOT LIKE') {
+                        preg_match('/(^%?)(.*?)(%?$)/', $value, $ma);
+
+                        // 如果没有LIKE内容没有加%模式，则自动在前后增加%
+                        if (! $ma[1] && ! $ma[3]) {
+                            $ma[1] = '%';
+                            $ma[3] = '%';
+                        }
+
+                        $value = $ma[1] . $this->escapeLike($ma[2]) . $ma[3];
+
+                        $sql[] = "{$key} {$op} ?";
+                    } else {
+                        $op || $op = '=';
+
+                        $sql[] = "{$key} {$op} ?";
+                    }
+
+                    $this->bindValue($value);
+                }
+            }
+        }
+
+        return ($withWhere ? ' WHERE' : '') . ' ' . implode(' ' . $glue . ' ', $sql);
+    }
 
     /**
-     * 某次请求的查询次数
+     * 检查待绑定的值及其类型
+     *
+     * @param mixed $value
+     */
+    protected function bindValue($value)
+    {
+        $this->binds[] = $value;
+        $this->bindTypes[] = $this->getParameterType($value);
+    }
+
+    /**
+     * The types of parameters to bind to the query
+     *
+     * @param mixed $param
      *
      * @return int
      */
-    abstract public function getQueryCount();
+    protected function getParameterType($param)
+    {
+        if (is_array($param)) {
+            foreach ($param as $p) {
+                if (! is_int($p)) {
+                    return DoctrineConnection::PARAM_STR_ARRAY;
+                }
+            }
+
+            return DoctrineConnection::PARAM_INT_ARRAY;
+        }
+        if (is_int($param)) {
+            return ParameterType::INTEGER;
+        }
+
+        return ParameterType::STRING;
+    }
 
     /**
-     * 某次请求的所有查询语句
+     * Get binds
      *
      * @return array
      */
-    abstract public function getQueryArray();
+    public function getBinds()
+    {
+        return $this->binds;
+    }
+
+    /**
+     * Get bind types
+     *
+     * @return array
+     */
+    public function getBindTypes()
+    {
+        return $this->bindTypes;
+    }
+
+    /**
+     * 设置参数绑定
+     *
+     * @param array $binds
+     * @param array $bindTypes
+     */
+    public function setBinds(array $binds, array $bindTypes)
+    {
+        $this->binds = $binds;
+        $this->bindTypes = $bindTypes;
+    }
+
+    /**
+     * Clear binds
+     */
+    public function clearBinds()
+    {
+        $this->binds = [];
+        $this->bindTypes = [];
+    }
+
+    /**
+     * 数组转换为表字段赋值，用于insert或者update
+     *
+     * @param array $arr
+     *
+     * @return string
+     */
+    public function assign(array $arr)
+    {
+        $sql = [];
+
+        foreach ($arr as $key => $value) {
+            // 如果$key是数字，比如： array('invalid' => 0, '1' => "quality=quality+1")
+            if (is_numeric($key)) {
+                // 不进行转义处理
+                $sql[] = $value;
+            } else {
+                $sql[] = $key . ' = ?';
+
+                $this->bindValue($value);
+            }
+        }
+
+        return ' ' . implode(', ', $sql);
+    }
+
+    /**
+     * 数据库名、表名、字段名只应该含：字母、数字、.、-、_等符号
+     * @param string      $field
+     * @param null|string $allowTags
+     *
+     * @return string
+     */
+    public function stripTags(string $field, $allowTags = null)
+    {
+        if (empty($field)) {
+            return '';
+        }
+
+        $pattern = 'a-z0-9_\-\.';
+        if ($allowTags) {
+            $pattern .= $allowTags;
+        }
+
+        return preg_replace("/[^{$pattern}]/i", '', $field);
+    }
+
+    /**
+     * 获取表名，可能带前缀
+     *
+     * @param string $table
+     *
+     * @return string
+     */
+    public function tableName(string $table)
+    {
+        return $this->getTablePrefix() . $table;
+    }
 
     /**
      * 获取表前缀
@@ -553,13 +635,13 @@ abstract class NeoDatabase
     }
 
     /**
-     * LIKE 字句转义处理
+     * 返回带单引号的转义过的 LIKE 字符串
      *
      * @param string $string The string to be escaped
      *
      * @return string
      */
-    public function escapeLikeString(?string $string)
+    public function escapeLike(?string $string)
     {
         return str_replace(['%', '_'], ['\%', '\_'], htmlentities($string));
     }
@@ -600,8 +682,6 @@ abstract class NeoDatabase
             '\s+IN',     // IN(list)
             '\s+NOT IN',    // NOT IN (list)
             '\s+LIKE',      // LIKE '%expr%'
-            '\s+LEFT LIKE',      // LIKE '%expr'
-            '\s+RIGHT LIKE',      // LIKE 'expr%'
             '\s+NOT LIKE',      // NOT LIKE 'expr'
         ];
 
@@ -609,24 +689,64 @@ abstract class NeoDatabase
     }
 
     /**
-     * 设置常驻内存
+     * 抛出数据库异常
      *
-     * @param bool $mr
+     * @param DatabaseException $ex Exception
+     *
+     * @throws DatabaseException
      */
-    public function setMemoryResident(bool $mr = false)
+    public function halt(DatabaseException $ex)
     {
-        $this->memory_resident = $mr;
+        $errortext = preg_replace('/[\r\n]/', ' ', $this->sql);
+
+        $this->sql = '';
+
+        // 记录到日志
+        $dberr = $this->generateErrorData($ex->getMessage(), $ex->getCode());
+        $dberr['SQL'] = $errortext;
+        NeoLog::error('db', 'InvalidSQL', $dberr);
+
+        // 抛出
+        $ex->setMore($dberr);
+
+        throw $ex;
     }
 
     /**
-     * 是否常驻内存
+     * 生成数据库错误信息数组
      *
-     * @return bool
+     * @param string $error
+     * @param int    $errno
+     *
+     * @return array
      */
-    public function isMemoryResident()
+    public function generateErrorData(string $error, int $errno)
     {
-        return $this->memory_resident;
+        $req = neo()->getRequest();
+
+        return [
+            'ex_error' => $error,
+            'ex_errno' => $errno,
+            'time' => formatLongDate(),
+            'script' => html_entity_decode($req->getRequestUri()),
+            'referer' => $req->referer(),
+            'ip' => $req->getClientIp(),
+        ];
     }
+
+    /**
+     * 返回数据库错误信息
+     *
+     * @return string
+     */
+    abstract public function getError();
+
+    /**
+     * 返回数据库错误码
+     *
+     * @return int
+     */
+    abstract public function getErrno();
 
     /**
      * 设置是否从主数据库获取数据
@@ -649,26 +769,6 @@ abstract class NeoDatabase
     }
 
     /**
-     * 设置是否使用代理
-     *
-     * @param bool $proxy
-     */
-    public function setUseDBProxy(bool $proxy = false)
-    {
-        $this->use_db_proxy = $proxy;
-    }
-
-    /**
-     * 是否使用代理
-     *
-     * @return bool
-     */
-    public function getUseDBProxy()
-    {
-        return $this->use_db_proxy;
-    }
-
-    /**
      * 使用hint强制走主库
      *
      * @param string $sql
@@ -678,7 +778,7 @@ abstract class NeoDatabase
      */
     public function forceMaster(string $sql, string $hint = '/*FORCE_MASTER*/')
     {
-        if ($this->getFromMaster() && $this->getUseDBProxy() && $sql[0] != '/') {
+        if ($this->getFromMaster() && $sql[0] != '/') {
             $sql = $hint . ' ' . $sql;
         }
 

@@ -9,9 +9,10 @@ interface CacheInterface
 {
     /**
      * 缓存服务器 挂了吗?
+     *
      * @return bool
      */
-    public function isWentAway();
+    public function isDown();
 
     /**
      * 写
@@ -26,7 +27,7 @@ interface CacheInterface
      *
      * @param string $key
      *
-     * @return array
+     * @return mixed
      */
     public function get($key);
 }

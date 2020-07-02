@@ -139,11 +139,12 @@ class NeoLog
             $logger->{$action}($message, $context);
         } catch (\Exception $ex) {
             $args = Debug::simplifyException($ex);
-
-            $args['action'] = $action;
-            $args['type'] = $type;
-            $args['message'] = $message;
-            $args['context'] = $context;
+            $args['log'] = [
+                'action' => $action,
+                'type' => $type,
+                'message' => $message,
+                'context' => $context,
+            ];
 
             $msg = NeoLogUtility::formatDate() . "\t" . $this->getLogId() . "\t" . json_encode(
                 $args,
@@ -222,7 +223,7 @@ class NeoLog
         }
 
         $logRedis = NeoFrame::initRedis('logstash');
-        if (! $logRedis || $logRedis->isWentAway()) {
+        if (! $logRedis || $logRedis->isDown()) {
             return null;
         }
 
@@ -459,8 +460,8 @@ class NeoLogProcessor
         $record['logtime'] = NeoLogUtility::formatDate();
         $record['type'] = $record['context']['type'];
 
-        $record['extra']['userid'] = (int) neo()->user['userid'];
-        $record['extra']['username'] = (string) neo()->user['username'];
+        $record['extra']['userid'] = (int) neo()->getUser()['userid'];
+        $record['extra']['username'] = (string) neo()->getUser()['username'];
         $record['extra']['host'] = Utility::gethostname();
         $record['extra']['traces'] = $record['context']['traces'];
 

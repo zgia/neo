@@ -57,7 +57,7 @@ class File implements CacheInterface
     /**
      * @return bool
      */
-    public function isWentAway()
+    public function isDown()
     {
         return false;
     }

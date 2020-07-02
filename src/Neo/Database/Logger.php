@@ -28,4 +28,16 @@ class Logger extends DebugStack
     {
         $this->enabled = false;
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function startQuery($sql, ?array $params = null, ?array $types = null)
+    {
+        if (count($this->queries) > 1000) {
+            // todo
+        }
+
+        parent::startQuery($sql, $params, $types);
+    }
 }

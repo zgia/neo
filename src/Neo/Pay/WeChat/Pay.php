@@ -4,7 +4,6 @@ namespace Neo\Pay\WeChat;
 
 use Neo\Exception\ParamException;
 use Neo\Exception\WeChatException;
-use Neo\Http\Request;
 use Neo\NeoLog;
 use Neo\Str;
 use Spatie\ArrayToXml\ArrayToXml;
@@ -118,7 +117,7 @@ class Pay extends AbstractPay
             'check_name' => 'NO_CHECK',
             'amount' => $amount,
             'desc' => '用户提现',
-            'spbill_create_ip' => $ip ?: Request::ip(),
+            'spbill_create_ip' => $ip ?: neo()->getRequest()->getClientIp(),
         ];
         $data['sign'] = $this->getSign($data);
 

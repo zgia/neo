@@ -90,12 +90,12 @@ class Route
      */
     private static function callFunc(array $routeInfo, string $controllerNameSpace = '')
     {
-        // 匹配的是数组, 格式：['controllerName', 'methodName']
+        // 数组, 格式：['controllerName', 'funcName']
         if (is_array($routeInfo[1])) {
-            [$controllerName, $methodName] = $routeInfo[1];
+            [$controllerName, $funcName] = $routeInfo[1];
         } else {
-            // 字符串, 格式：controllerName@methodName
-            [$controllerName, $methodName] = explode('@', $routeInfo[1]);
+            // 字符串, 格式：controllerName@funcName
+            [$controllerName, $funcName] = explode('@', $routeInfo[1]);
         }
 
         $className = $controllerNameSpace ? $controllerNameSpace . '\\' . $controllerName : $controllerName;
@@ -103,9 +103,9 @@ class Route
         $params = [];
 
         if (! empty($routeInfo[2]) && is_array($routeInfo[2])) {
-            if ($methodName === '*') {
+            if ($funcName === '*') {
                 if (isset($routeInfo[2]['function'])) {
-                    $methodName = $routeInfo[2]['function'];
+                    $funcName = $routeInfo[2]['function'];
                     unset($routeInfo[2]['function']);
                 }
             }
@@ -115,10 +115,14 @@ class Route
             }
         }
 
-        if ($methodName === '*') {
-            $methodName = 'method_not_allowed';
+        if ($funcName === '*') {
+            $funcName = 'method_not_allowed';
         }
 
-        (new $className(NeoFrame::getInstance()))->{$methodName}(...$params);
+        // 用于是否登录验证和日志等
+        $neo = NeoFrame::getInstance();
+        $neo['routeController'] = ['class' => $className, 'func' => $funcName, 'params' => $params];
+
+        (new $className())->{$funcName}(...$params);
     }
 }

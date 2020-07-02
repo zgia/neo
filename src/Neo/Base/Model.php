@@ -9,23 +9,37 @@ class Model extends NeoBase
 {
     /**
      * 模型的映射表
+     *
      * @var string
      */
     protected $table;
 
     /**
      * 缺省主键，如果主键不是表名+ID，请务必指定主键名称
+     *
      * @var string
      */
     protected $tableid;
 
-    // 下面2个参数用于在模型中操作另一张表的处理
-    protected $oldTable;
+    /**
+     * 删除标记：deleted, deleted_at...
+     *
+     * @var string
+     */
+    protected $deletedFlag = 'deleted';
 
-    protected $oldTableid;
+    /**
+     * 删除后写入的值：time，其他值
+     * 其他值：1，传入什么，写什么
+     * time：time()，当前时间
+     *
+     * @var string
+     */
+    protected $deletedVal = 1;
 
     /**
      * 映射表中是否有主键
+     *
      * @var bool
      */
     protected $hasPrimaryKey = true;
@@ -45,8 +59,6 @@ class Model extends NeoBase
         if (! $this->tableid) {
             $this->tableid = $this->table . 'id';
         }
-
-        $this->userid = $this->neo->userid;
     }
 
     /**
@@ -54,8 +66,7 @@ class Model extends NeoBase
      */
     public function beginTransaction()
     {
-        $this->getDB()
-            ->beginTransaction();
+        $this->neo->getDB()->beginTransaction();
     }
 
     /**
@@ -63,67 +74,64 @@ class Model extends NeoBase
      */
     public function commit()
     {
-        $this->getDB()
-            ->commit();
+        $this->neo->getDB()->commit();
     }
 
     /**
      * 在主数据库上回滚事务
      */
-    public function rollback()
+    public function rollBack()
     {
-        $this->getDB()
-            ->rollback();
+        $this->neo->getDB()->rollBack();
     }
 
     /**
-     * 获取当前操作的表
+     * 设置当前操作的表
      *
-     * @return mixed|string
+     * @param string $table
      */
-    public function getTable()
+    public function setTable(string $table)
     {
-        return $this->table;
-    }
-
-    /**
-     * 当需要在模型中使用Model基类中的方法操作另一个表时，应该使用这个方法。
-     * 如果另一张表的主键不是：表名+ID，那么这里必须传入tableid。
-     * 否则将无法获取正确的结果。
-     *
-     * 注：如果不想传入主键，则需要将第二个参数设置为NULL，即：setTable($tbl, NULL);
-     *
-     * @param string $table   表名
-     * @param string $tableid 表的主键
-     */
-    public function setTable(string $table, string $tableid = 'nil')
-    {
-        $this->oldTable = $this->table;
-        $this->oldTableid = $this->tableid;
-
         $this->table = $table;
-        if ($tableid === 'nil') {
-            $this->tableid = $this->table . 'id';
-        } elseif ($tableid) {
-            $this->tableid = $tableid;
-        } else {
-            $this->tableid = null;
-        }
     }
 
     /**
-     * 当在模型中操作另一张表时，查询后，一定要恢复为当前模型的缺省表
+     * 设置当前操作的表的主键名称
      *
-     * @see setTable($table, $tableid = NULL)
+     * @param string $tableid
      */
-    public function restoreTable()
+    public function setTableid(string $tableid)
     {
-        if (! isset($this->oldTable) || ! $this->oldTable) {
-            return;
-        }
-        $this->table = $this->oldTable;
-        $this->tableid = $this->oldTableid;
-        unset($this->oldTable, $this->oldTableid);
+        $this->tableid = $tableid;
+    }
+
+    /**
+     * 设置删除标记名称
+     *
+     * @param string $flag
+     */
+    public function setDeletedFlag(string $flag)
+    {
+        $this->deletedFlag = $flag;
+    }
+
+    /**
+     * 设置删除标记的值类型
+     *
+     * @param string $type
+     */
+    public function setDeletedVal(string $type)
+    {
+        $this->deletedVal = $type;
+    }
+
+    /**
+     * 设置是否有主键
+     * @param bool $yesorno
+     */
+    public function setHasPrimaryKey(bool $yesorno)
+    {
+        $this->hasPrimaryKey = $yesorno;
     }
 
     /**
@@ -137,11 +145,14 @@ class Model extends NeoBase
      */
     public function selectSQL(array $conditions = [], array $more = [], array $ret = [])
     {
+        if (! empty($conditions['sql'])) {
+            return $conditions['sql'];
+        }
+
         $ret['k'] || $ret['k'] = $this->tableid;
         $more['from'] || $more['from'] = "{$this->table} AS {$this->table}";
 
-        return $this->getDB()
-            ->selectSQL($conditions, $more, $ret);
+        return $this->neo->getDB()->selectSQL($conditions, $more, $ret);
     }
 
     /**
@@ -153,7 +164,7 @@ class Model extends NeoBase
      *
      * @return array
      */
-    public function items(array $conditions = [], array $more = [], array $ret = [])
+    public function rows(array $conditions = [], array $more = [], array $ret = [])
     {
         $sql = $this->selectSQL($conditions, $more, $ret);
 
@@ -163,13 +174,7 @@ class Model extends NeoBase
         $key = $ret['k'] ?: (array_key_exists('k', $ret) ? null : $this->tableid);
         $element = $ret['e'] ?: null;
 
-        if (array_key_exists('obj', $ret)) {
-            return $this->getDB()
-                ->fetchObjectArray($sql, $ret['obj']);
-        }
-
-        return $this->getDB()
-            ->fetchArray($sql, $element, $key);
+        return $this->neo->getDB()->fetchArray($sql, $element, $key);
     }
 
     /**
@@ -181,7 +186,7 @@ class Model extends NeoBase
      *
      * @return null|array|object
      */
-    public function item(array $conditions = [], array $more = [], $returnField = null)
+    public function row(array $conditions = [], array $more = [], $returnField = null)
     {
         if (! $more || ! $more['field']) {
             $field = is_array($returnField) ? implode(',', $returnField) : $returnField;
@@ -193,21 +198,9 @@ class Model extends NeoBase
 
         $sql = $this->selectSQL($conditions, $more);
 
-        if (array_key_exists('obj', $more)) {
-            $row = $this->getDB()
-                ->fetchObjectFirst($sql, $more['obj']);
+        $row = $this->neo->getDB()->fetchRow($sql);
 
-            if (is_string($returnField) && strlen($returnField) > 0) {
-                return $row ? $row->{$returnField} : null;
-            }
-
-            return $row;
-        }
-
-        $row = $this->getDB()
-            ->first($sql);
-
-        if (is_string($returnField)) {
+        if (is_string($returnField) && $returnField) {
             return $row ? $row[$returnField] : null;
         }
 
@@ -221,19 +214,9 @@ class Model extends NeoBase
      *
      * @return array
      */
-    public function getItem(int $id)
+    public function getRow(int $id)
     {
-        return $this->item([$this->tableid => $id]);
-    }
-
-    /**
-     * 获取自增表的最新一条数据
-     *
-     * @return array
-     */
-    public function latest()
-    {
-        return $this->item([], ['orderby' => "{$this->tableid} DESC"]);
+        return $this->row([$this->tableid => $id]);
     }
 
     /**
@@ -244,14 +227,23 @@ class Model extends NeoBase
      *
      * @return string
      */
-    public function single(array $conditions = [], array $more = [])
+    public function one(array $conditions = [], array $more = [])
     {
         $more['limit'] = 1;
 
         $sql = $this->selectSQL($conditions, $more);
 
-        return $this->getDB()
-            ->single($sql);
+        return $this->neo->getDB()->fetchOne($sql);
+    }
+
+    /**
+     * 获取自增表的最新一条数据
+     *
+     * @return array
+     */
+    public function latest()
+    {
+        return $this->row([], ['orderby' => "{$this->tableid} DESC"]);
     }
 
     /**
@@ -259,33 +251,36 @@ class Model extends NeoBase
      *
      * @param string $field
      *
-     * @return int
+     * @return string
      */
-    public function maxId(string $field = null)
+    public function max(string $field = null)
     {
         $field || $field = $this->tableid;
-        $max = $this->single([], ['field' => "MAX({$field})"]);
 
-        return (int) $max;
+        if ($field) {
+            return (string) $this->one([], ['field' => "MAX({$field})"]);
+        }
+
+        return null;
     }
 
     /**
      * 聚合
      *
-     * @param string $ele        聚合的元素
+     * @param string $field      聚合的元素
      * @param array  $conditions 条件
      * @param string $groupby    分组的元素
      *
      * @return int
      */
-    public function sum(string $ele, array $conditions = [], string $groupby = '')
+    public function sum(string $field, array $conditions = [], string $groupby = '')
     {
-        $more = ['field' => "SUM({$ele})"];
+        $more = ['field' => "SUM({$field})"];
         if ($groupby) {
             $more['groupby'] = $groupby;
         }
 
-        $total = $this->single($conditions, $more);
+        $total = $this->one($conditions, $more);
 
         return (int) $total;
     }
@@ -298,14 +293,10 @@ class Model extends NeoBase
      *
      * @return int
      */
-    public function total(array $conditions = [], string $field = '*')
+    public function total(array $conditions = [], ?string $field = '*')
     {
-        $total = $this->single(
-            $conditions,
-            [
-                'field' => "COUNT({$field})",
-            ]
-        );
+        $field || $field = '*';
+        $total = $this->one($conditions, ['field' => "COUNT({$field})"]);
 
         return (int) $total;
     }
@@ -317,7 +308,7 @@ class Model extends NeoBase
      * @param array $conditions 条件
      * @param bool  $replace    当前数据是插入还是替换
      *
-     * @return mixed int or false
+     * @return bool|int
      */
     public function save(array $data, array $conditions = [], bool $replace = false)
     {
@@ -329,78 +320,42 @@ class Model extends NeoBase
             unset($data[$this->tableid]);
         }
 
-        return ! isset($data[$this->tableid]) && empty($conditions) ? $this->newItem(
-            $data,
-            $replace
-        ) : $this->updateItem(
-            $data,
-            $conditions
-        );
+        if (! isset($data[$this->tableid]) && empty($conditions)) {
+            return $this->insert($data, $replace);
+        }
+        return $this->update($data, $conditions);
     }
 
     /**
      * 添加新记录
      *
-     * @param array $data    数据
-     * @param bool  $replace 当前数据是插入还是替换
+     * @param array  $data    数据
+     * @param bool   $replace 当前数据是插入还是替换
+     * @param string $table   指定数据库表
      *
      * @return int 最后插入的数据的自增ID或者SQL语句产生数据的行数
      */
-    public function newItem(array $data, bool $replace = false)
+    public function insert(array $data, bool $replace = false, ?string $table = null)
     {
-        if (! $replace) {
-            unset($data[$this->tableid]);
-        }
+        $affected = $this->neo->getDB()->insert($table ?: $this->table, $data, $replace);
 
-        $affected = $this->getDB()
-            ->insert($this->table, $data, $replace);
-
-        return $this->hasPrimaryKey ? $this->getDB()
-            ->insertId() : $affected;
-    }
-
-    /**
-     * 添加新记录
-     *
-     * @param array  $data       数据
-     * @param array  $conditions 条件
-     * @param string $table      数据库表
-     *
-     * @return int
-     */
-    public function updateItem(array $data, array $conditions = [], string $table = '')
-    {
-        if ($data[$this->tableid]) {
-            $id = $data[$this->tableid];
-            unset($data[$this->tableid]);
-
-            if (! array_key_exists($this->tableid, $conditions)) {
-                $conditions[$this->tableid] = $id;
-            }
-        }
-
-        return $this->update($data, $conditions, $table);
+        return $this->hasPrimaryKey ? $this->neo->getDB()->insertId() : $this->renewAffectedRows($affected);
     }
 
     /**
      * 更新数据
      *
-     * @param array  $data
-     * @param array  $conditions
-     * @param string $table
+     * @param array  $data       数据
+     * @param array  $conditions 条件
+     * @param string $table      指定数据库表
      *
      * @return int
      */
-    public function update(array $data, array $conditions = [], string $table = '')
+    public function update(array $data, array $conditions = [], ?string $table = null)
     {
-        $table || $table = $this->table;
+        $affected = $this->neo->getDB()->update($table ?: $this->table, $data, $conditions);
 
-        $affected = $this->getDB()
-            ->update($table, $data, $conditions);
-
-        $this->renewAffectedRows($affected);
-
-        return $affected;
+        return $this->renewAffectedRows($affected);
     }
 
     /**
@@ -420,46 +375,27 @@ class Model extends NeoBase
 
         // 是否标记为删除
         if ($isflag) {
-            $affected = $this->updateItem(['deleted' => 1], $conditions);
+            $val = $this->deletedVal == 'time' ? time() : $this->deletedVal;
+
+            $affected = $this->update([$this->deletedFlag => $val], $conditions);
         } else {
-            $affected = $this->getDB()
-                ->delete($this->table, $conditions);
+            $affected = $this->neo->getDB()->delete($this->table, $conditions);
         }
 
-        $this->renewAffectedRows($affected);
-
-        return $affected;
+        return $this->renewAffectedRows($affected);
     }
 
     /**
      * 按照id删除记录
      *
-     * @param int  $id     id
-     * @param bool $isflag 是否标记删除，默认为标记
+     * @param mixed $id     id
+     * @param bool  $isflag 是否标记删除，默认为标记
      *
      * @return int
      */
-    public function deleteItem(int $id, bool $isflag = true)
+    public function deleteItem($id, bool $isflag = true)
     {
         return $this->delete([$this->tableid => $id], $isflag);
-    }
-
-    /**
-     * 批量添加新纪录
-     *
-     * @param array $data    数据
-     * @param bool  $replace 当前数据是插入还是替换
-     * @param int   $limit   分批写入数量
-     *
-     * @return mixed SQL语句产生数据的行数
-     */
-    public function newBatchItem(array $data, bool $replace = false, int $limit = 200)
-    {
-        $affected = $this->getDB()
-            ->batchInsert($this->table, $data, $replace, $limit);
-        $this->renewAffectedRows($affected);
-
-        return $affected;
     }
 
     /**
@@ -470,14 +406,18 @@ class Model extends NeoBase
      * -1：出错了
      *
      * @param int $affected
+     *
+     * @return int
      */
-    protected function renewAffectedRows(int &$affected)
+    protected function renewAffectedRows(int $affected)
     {
         if ($affected == 0) {
             $affected = PHP_INT_MAX;
         } elseif ($affected == -1) {
             $affected = 0;
         }
+
+        return $affected;
     }
 
     /**
@@ -487,8 +427,7 @@ class Model extends NeoBase
      */
     public function getErrno()
     {
-        return $this->getDB()
-            ->getErrno();
+        return $this->neo->getDB()->getErrno();
     }
 
     /**
@@ -498,7 +437,6 @@ class Model extends NeoBase
      */
     public function getError()
     {
-        return $this->getDB()
-            ->getError();
+        return $this->neo->getDB()->getError();
     }
 }

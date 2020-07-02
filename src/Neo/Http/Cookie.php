@@ -26,7 +26,8 @@ class Cookie
             return;
         }
 
-        $request = neo()->request;
+        $request = neo()->getRequest();
+        $response = neo()->getResponse();
 
         $expire = $expire ? time() + $expire : 0;
 
@@ -40,7 +41,7 @@ class Cookie
 
         $cookie = SymfonyCookie::create($name, $value, $expire, $path, $domain, $secure, $httpOnly);
 
-        neo()->response->headers->setCookie($cookie);
+        $response->headers->setCookie($cookie);
     }
 
     /**
@@ -52,6 +53,6 @@ class Cookie
      */
     public static function get(string $name)
     {
-        return neo()->request->cookies->get($name);
+        return neo()->getRequest()->cookies->get($name);
     }
 }

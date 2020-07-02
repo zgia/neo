@@ -106,7 +106,7 @@ class MemcachedStore implements CacheInterface
      *
      * @return bool
      */
-    public function isWentAway()
+    public function isDown()
     {
         try {
             $this->validateConnection($this->getMemcached());

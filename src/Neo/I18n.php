@@ -8,6 +8,13 @@ namespace Neo;
 class I18n
 {
     /**
+     * 语言短语
+     * 
+     * @var string[]
+     */
+    private static $phrases = [];
+
+    /**
      * 获取缺省语言
      *
      * @param string $languages_dir 语言目录
@@ -37,7 +44,7 @@ class I18n
             return false;
         }
 
-        neo()->i18n = include $lanFile;
+        static::$phrases = include $lanFile;
 
         return true;
     }
@@ -51,9 +58,7 @@ class I18n
      */
     public static function translate(string $text)
     {
-        $i18n = neo()->i18n;
-
-        return $i18n[$text] ?? $text;
+        return static::$phrases[$text] ?? $text;
     }
 
     /**

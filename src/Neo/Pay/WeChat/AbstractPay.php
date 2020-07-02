@@ -251,7 +251,7 @@ abstract class AbstractPay
                 $response = json_decode($response, true);
             }
         } catch (NeoException | \Exception $ex) {
-            throw new WeChatException($ex->getMessage(), $ex->getCode());
+            throw new WeChatException($ex->getMessage(), $ex->getCode(), $ex);
         }
 
         return $response;

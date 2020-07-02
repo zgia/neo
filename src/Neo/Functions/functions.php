@@ -1,11 +1,14 @@
 <?php
 
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
+use Neo\Database\MySQL;
 use Neo\Database\MySQLExplain;
+use Neo\Database\NeoDatabase;
 use Neo\Debug;
 use Neo\Html\Page;
-use Neo\Html\Template;
-use Neo\Http\Request as NeoRequest;
-use Neo\Http\Response as NeoResponse;
+use Neo\Http\Request;
+use Neo\I18n;
 use Neo\NeoFrame;
 use Neo\Utility;
 
@@ -34,7 +37,7 @@ function neo()
  *
  * @param bool $init 如果没有链接，则初始化
  *
- * @return \Neo\Database\MySQLi|\Neo\Database\NeoDatabase|\Neo\Database\PdoMySQL
+ * @return MySQL|NeoDatabase
  */
 function db(bool $init = true)
 {
@@ -51,12 +54,11 @@ function db(bool $init = true)
  */
 function input(string $gpc, array $variables)
 {
-    $neo = neo();
+    $request = neo()->getRequest();
 
-    $params = NeoRequest::cleanGPC($gpc, $variables);
-    $neo->input = array_merge($neo->input, $params);
+    $params = $request->cleanGPC($gpc, $variables);
 
-    return $neo->input;
+    return $request->setParams($params);
 }
 
 /**
@@ -68,7 +70,7 @@ function input(string $gpc, array $variables)
  *
  * @return mixed
  */
-function inputOne(string $gpc, string $varname, int $vartype = TYPE_NOCLEAN)
+function inputOne(string $gpc, string $varname, int $vartype = INPUT_TYPE_NOCLEAN)
 {
     $input = input($gpc, [$varname => $vartype]);
 
@@ -85,21 +87,7 @@ function inputOne(string $gpc, string $varname, int $vartype = TYPE_NOCLEAN)
  */
 function inputArray(array $source, array $variables)
 {
-    return NeoRequest::cleanArray($source, $variables);
-}
-
-/**
- * @param string $template
- *
- * @return string
- */
-function loadTemplate(string $template)
-{
-    return Template::getTemplate(preg_replace(
-        '/' . \Neo\Html\Template::$TEMPLATE_FILE_EXTENSION . '$/i',
-        '',
-        $template
-    ));
+    return Request::cleanArray($source, $variables);
 }
 
 /**
@@ -158,45 +146,6 @@ function loadClass(string $class, string $namespace = null)
 }
 
 /**
- * 加载工具类
- *
- * @param string $helper    工具类
- * @param string $namespace 命名空间前缀
- *
- * @return \Neo\Base\Helper 加载的类
- */
-function loadHelper(string $helper, $namespace = 'App\\Helper')
-{
-    return loadClass($helper, $namespace);
-}
-
-/**
- * 加载业务
- *
- * @param string $service   业务类
- * @param string $namespace 命名空间前缀
- *
- * @return \Neo\Base\Service 加载的类
- */
-function loadService(string $service, $namespace = 'App\\Service')
-{
-    return loadClass($service, $namespace);
-}
-
-/**
- * 加载模型
- *
- * @param string $model     模型类
- * @param string $namespace 命名空间前缀
- *
- * @return \Neo\Base\Model 加载的类
- */
-function loadModel(string $model, $namespace = 'App\\Model')
-{
-    return loadClass($model, $namespace);
-}
-
-/**
  * 多语言翻译
  *
  * @param string $text
@@ -217,7 +166,7 @@ function translate(string $text)
  */
 function __(string $text)
 {
-    return \Neo\I18n::__($text);
+    return I18n::__($text);
 }
 
 /**
@@ -266,13 +215,13 @@ function __f()
  * @param null|string $tz
  * @param null|bool   $immutable
  *
- * @return \Carbon\Carbon|\Carbon\CarbonImmutable
+ * @return Carbon|CarbonImmutable
  */
 function carbon(?string $tz = null, ?bool $immutable = false)
 {
     $tz || $tz = getDatetimeZone();
 
-    return $immutable ? \Carbon\CarbonImmutable::now($tz) : \Carbon\Carbon::now($tz);
+    return $immutable ? CarbonImmutable::now($tz) : Carbon::now($tz);
 }
 
 /**
@@ -334,8 +283,7 @@ function formatDate(string $format = 'Ymd', int $timestamp = 0, int $yestoday = 
 
     if ($timestamp) {
         $microsecond = $carbon->microsecond;
-        $carbon->setTimestamp($timestamp)
-            ->setMicrosecond($microsecond);
+        $carbon->setTimestamp($timestamp)->setMicrosecond($microsecond);
     } else {
         $timestamp = $carbon->timestamp;
     }
@@ -522,11 +470,9 @@ function printOutJSON(array $jsonarray, int $statusCode = 200)
         $jsonarray['data'] = [];
     }
 
-    neo()->request->setRequestFormat('json');
+    neo()->getRequest()->setRequestFormat('json');
 
-    Debug::logApi($jsonarray);
-
-    byebye($statusCode, json_encode($jsonarray));
+    byebye($statusCode, $jsonarray);
 }
 
 /**
@@ -565,19 +511,19 @@ function displayError(string $message, string $url = '', bool $back = true)
 /**
  * 页面结束处理
  *
- * @param int    $statusCode Http状态码
- * @param string $content    输出内容
+ * @param int          $statusCode Http状态码
+ * @param array|string $content    输出内容
  */
-function byebye(?int $statusCode = null, ?string $content = null)
+function byebye(?int $statusCode = null, $content = null)
 {
-    $neo = neo();
+    Debug::logHttpContent($content);
 
     // 只有调试模式下，非ajax调用页面输出
-    if (! Utility::isAjax() && $neo['explain_sql']) {
+    if (! Utility::isAjax() && neo()->getExplainSQL()) {
         MySQLExplain::display();
     }
 
-    NeoResponse::send($statusCode, $content);
+    neo()->getResponse()->sendData($statusCode, is_array($content) ? json_encode($content) : $content);
 
     unload();
 }
@@ -601,8 +547,6 @@ function unload()
  */
 function getUserDefinedVars(array $vars, array $filters = [])
 {
-    $neo = neo();
-
     $filters[] = 'neo';
     $filters[] = 'db';
 
@@ -613,7 +557,7 @@ function getUserDefinedVars(array $vars, array $filters = [])
         }
     }
 
-    $neo->setTemplateVars($left);
+    neo()->getTemplate()->setVars($left);
 }
 
 /**
@@ -623,11 +567,72 @@ function getUserDefinedVars(array $vars, array $filters = [])
  *
  * @return string
  */
-function removeSystemPathFromFileName(?string $filename = null)
+function removeSysPath(?string $filename = null)
 {
     if ($filename) {
-        return str_ireplace(NeoFrame::getAbsPath(), '', $filename);
+        return str_ireplace(neo()->getAbsPath(), '', $filename);
     }
 
     return $filename;
+}
+/**
+ * 打印变量
+ *
+ * @param mixed ...$args
+ */
+function d(...$args)
+{
+    if (empty($args)) {
+        return;
+    }
+
+    $addtrace = false;
+    if ($args[count($args) - 1] == '__add_trace__') {
+        $addtrace = true;
+        array_pop($args);
+    }
+
+    $lines = [];
+    if ($addtrace) {
+        $calledFrom = Debug::getTraces();
+        $lines = Debug::getTracesAsString(array_slice($calledFrom, 2));
+    }
+
+    $hr = PHP_EOL . '-------------------------' . PHP_EOL;
+
+    $errors = 'Time: ' . formatLongDate() . $hr;
+    foreach ($args as $arg) {
+        $errors .= print_r($arg, true) . PHP_EOL;
+    }
+
+    if (Utility::isCli() || Utility::isAjax()) {
+        echo $errors, $hr, implode(PHP_EOL, $lines);
+    } else {
+        static $class = null;
+
+        if ($class == null) {
+            $class = '<style>pre{display:block;padding:10px;margin:20px;font-size:13px;line-height:1.5;color:#333;word-break:break-all;word-wrap:break-word;background-color:#f5f5f5;border:1px solid #ccc;border-radius:4px;overflow:auto;}code{padding:1px 4px;font-size:90%;color:#c7254e;background-color:#f9f2f4;border-radius:4px;border:1px solid #e1e1e1;-webkit-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);-moz-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);}</style>';
+            echo $class;
+        }
+
+        echo '<pre>', $errors, '</pre>';
+
+        if ($addtrace) {
+            echo '<pre><ol><li>', implode('</li><li>', $lines), '</li></ol></pre>';
+        }
+    }
+}
+
+/**
+ * 打印变量，并退出
+ *
+ * @param mixed ...$args
+ */
+function x(...$args)
+{
+    $args[] = '__add_trace__';
+
+    d(...$args);
+
+    unload();
 }

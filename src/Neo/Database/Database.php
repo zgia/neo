@@ -21,7 +21,7 @@ interface Database
      *
      * @return string
      */
-    public function execute(string $sql);
+    public function execute(string $sql = null);
 
     /**
      * 关闭数据库连接

@@ -23,19 +23,19 @@ class Redis implements CacheInterface
     private $phpRedis;
 
     /**
-     * Redis是否挂了
+     * 标记Redis是否挂了
      *
      * @var bool
      */
-    private $wentaway = false;
+    private $down = false;
 
     /**
      * Redis 挂了吗?
      * @return bool
      */
-    public function isWentAway()
+    public function isDown()
     {
-        return $this->wentaway;
+        return $this->down;
     }
 
     /**
@@ -51,7 +51,7 @@ class Redis implements CacheInterface
      *
      * @return mixed
      */
-    public function json_decode($val)
+    public static function jsonDecode($val)
     {
         return \json_decode($val, true, 512, JSON_BIGINT_AS_STRING);
     }
@@ -67,7 +67,7 @@ class Redis implements CacheInterface
     {
         $value = $this->phpRedis->get($key);
 
-        $value && $value = $this->json_decode($value);
+        $value && $value = static::jsonDecode($value);
 
         return $value ?: null;
     }
@@ -85,8 +85,6 @@ class Redis implements CacheInterface
      */
     public function set($key, $value, $expired = 0)
     {
-        $value = json_encode($value);
-
         if (is_array($expired) && $expired) {
             // nothing
         } else {
@@ -95,11 +93,11 @@ class Redis implements CacheInterface
 
         $expired || $expired = [];
 
-        return $this->phpRedis->set($key, $value, $expired);
+        return $this->phpRedis->set($key, json_encode($value), $expired);
     }
 
     /**
-     * 批量写
+     * 批零设置多个
      *
      * @param array $data
      */
@@ -113,50 +111,13 @@ class Redis implements CacheInterface
     }
 
     /**
-     * 阻塞式弹出
-     *
-     * @param string $key
-     * @param int    $timeout
-     *
-     * @return null|array|int|string
-     */
-    public function bPop($key, $timeout)
-    {
-        $value = $this->phpRedis->brPop($key, $timeout);
-
-        if (! is_null($value)) {
-            return $this->json_decode($value[1]);
-        }
-
-        return null;
-    }
-
-    /**
-     * Pop
-     *
-     * @param string $key
-     *
-     * @return null|array|int|string
-     */
-    public function pop($key)
-    {
-        $value = $this->phpRedis->rPop($key);
-
-        if (! is_null($value)) {
-            return $this->json_decode($value);
-        }
-
-        return null;
-    }
-
-    /**
-     * Push
+     *Push
      *
      * @param string $key
      * @param mixed  $value
      * @param bool   $batch true表示批量push多个值
      */
-    public function push(string $key, $value, $batch = false)
+    public function push($key, $value, $batch = false)
     {
         if ($batch) {
             if (! is_array($value)) {
@@ -165,10 +126,42 @@ class Redis implements CacheInterface
         } else {
             $value = [$value];
         }
-
         $value = array_map('json_encode', $value);
 
         $this->phpRedis->lPush($key, ...$value);
+    }
+
+    /**
+     * @param string $key
+     *
+     * @return null|int|mixed|string
+     */
+    public function pop($key)
+    {
+        $value = $this->phpRedis->rPop($key);
+
+        if (! is_null($value)) {
+            return static::jsonDecode($value);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $key
+     * @param int    $timeout
+     *
+     * @return null|int|mixed|string
+     */
+    public function bPop($key, $timeout)
+    {
+        $value = $this->phpRedis->brPop($key, $timeout);
+
+        if (! is_null($value)) {
+            return static::jsonDecode($value[1]);
+        }
+
+        return null;
     }
 
     /**
@@ -212,7 +205,7 @@ class Redis implements CacheInterface
      *
      * @return null|\Redis
      */
-    public static function initRedis(array $config)
+    public static function loadRedis(array $config)
     {
         if (empty($config) || empty($config['host'])) {
             return null;
@@ -244,7 +237,7 @@ class Redis implements CacheInterface
      * @throws \RedisClusterException
      * @return null|\RedisCluster
      */
-    public static function initRedisCluster(array $config)
+    public static function loadCluster(array $config)
     {
         if (empty($config) || empty($config['host'])) {
             return null;
@@ -274,13 +267,13 @@ class Redis implements CacheInterface
     private function __construct(array $config)
     {
         if (empty($config['cluster'])) {
-            $this->phpRedis = self::initRedis($config);
+            $this->phpRedis = self::loadRedis($config);
         } else {
-            $this->phpRedis = self::initRedisCluster($config);
+            $this->phpRedis = self::loadCluster($config);
         }
 
         if (is_null($this->phpRedis)) {
-            $this->wentaway = true;
+            $this->down = true;
         } else {
             if (is_array($config['options'])) {
                 foreach ($config['options'] as $opt => $val) {

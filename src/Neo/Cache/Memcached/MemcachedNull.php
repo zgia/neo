@@ -15,7 +15,7 @@ class MemcachedNull implements CacheInterface
      * Memcached 挂了吗?
      * @return bool
      */
-    public function isWentAway()
+    public function isDown()
     {
         return true;
     }

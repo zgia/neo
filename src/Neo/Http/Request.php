@@ -2,47 +2,72 @@
 
 namespace Neo\Http;
 
-/*
- * Ways of cleaning input. Should be mostly self-explanatory.
- */
+use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
+/*
+ * 按照预设规则强制转换Request参数的类型
+ */
 // no change
-define('TYPE_NOCLEAN', 0);
+define('INPUT_TYPE_NOCLEAN', 0);
 // force boolean
-define('TYPE_BOOL', 1);
+define('INPUT_TYPE_BOOL', 1);
 // force integer
-define('TYPE_INT', 2);
+define('INPUT_TYPE_INT', 2);
 // force unsigned integer
-define('TYPE_UINT', 3);
+define('INPUT_TYPE_UINT', 3);
 // force number
-define('TYPE_NUM', 4);
+define('INPUT_TYPE_NUM', 4);
 // force unsigned number
-define('TYPE_UNUM', 5);
+define('INPUT_TYPE_UNUM', 5);
 // force unix datestamp (unsigned integer)
-define('TYPE_UNIXTIME', 6);
+define('INPUT_TYPE_UNIXTIME', 6);
 // force trimmed string
-define('TYPE_STR', 7);
+define('INPUT_TYPE_STR', 7);
 // force string - no trim
-define('TYPE_NOTRIM', 8);
+define('INPUT_TYPE_NOTRIM', 8);
 // force trimmed string with HTML made safe
-define('TYPE_NOHTML', 9);
+define('INPUT_TYPE_NOHTML', 9);
 // force array
-define('TYPE_ARRAY', 10);
+define('INPUT_TYPE_ARRAY', 10);
 // force file
-define('TYPE_FILE', 11);
+define('INPUT_TYPE_FILE', 11);
 // force binary string
-define('TYPE_BINARY', 12);
+define('INPUT_TYPE_BINARY', 12);
 
 /**
  * Class to handle and sanitize variables from GET, POST and COOKIE etc
  */
-class Request
+class Request extends SymfonyRequest
 {
     /**
-     * Request constructor.
+     * 请求参数
+     *
+     * @var array
      */
-    private function __construct()
+    private $params = [];
+
+    /**
+     * 读取Request请求参数
+     *
+     * @return array
+     */
+    public function getParams()
     {
+        return $this->params;
+    }
+
+    /**
+     * 设置Request请求参数
+     *
+     * @param array $params
+     * 
+     * @return array
+     */
+    public function setParams(array $params)
+    {
+        $this->params = array_merge($this->params, $params);
+
+        return $this->params;
     }
 
     /**
@@ -58,7 +83,7 @@ class Request
         $return = [];
 
         foreach ($variables as $varname => $vartype) {
-            $return[$varname] = self::clean($source[$varname], $vartype, isset($source[$varname]));
+            $return[$varname] = static::clean($source[$varname], $vartype, isset($source[$varname]));
         }
 
         return $return;
@@ -72,10 +97,8 @@ class Request
      *
      * @return array
      */
-    public static function cleanGPC($gpc, $variables)
+    public function cleanGPC($gpc, $variables)
     {
-        $request = neo()->request;
-
         static $superglobal = [
             'g' => 'query',
             'p' => 'request',
@@ -92,17 +115,17 @@ class Request
 
             foreach (str_split($requestOrder) as $order) {
                 $prop = $superglobal[$order];
-                $data = array_merge($data, $request->{$prop}->all());
+                $data = array_merge($data, $this->{$prop}->all());
             }
         } else {
             $prop = $superglobal[$gpc];
-            $data = $request->{$prop}->all();
+            $data = $this->{$prop}->all();
         }
 
         $input = [];
 
         foreach ($variables as $varname => $vartype) {
-            $input[$varname] = self::clean($data[$varname], $vartype, isset($data[$varname]));
+            $input[$varname] = static::clean($data[$varname], $vartype, isset($data[$varname]));
         }
 
         return $input;
@@ -117,34 +140,30 @@ class Request
      *
      * @return mixed The cleaned value
      */
-    private static function clean($var, $vartype = TYPE_NOCLEAN, $exists = true)
+    private static function clean($var, int $vartype = INPUT_TYPE_NOCLEAN, bool $exists = true)
     {
         if ($exists) {
-            $var = self::doClean($var, $vartype);
+            $var = static::doClean($var, $vartype);
         } else {
             switch ($vartype) {
-                case TYPE_INT:
-                case TYPE_UINT:
-                case TYPE_NUM:
-                case TYPE_UNUM:
-                case TYPE_UNIXTIME:
-                case TYPE_BOOL:
-
+                case INPUT_TYPE_INT:
+                case INPUT_TYPE_UINT:
+                case INPUT_TYPE_NUM:
+                case INPUT_TYPE_UNUM:
+                case INPUT_TYPE_UNIXTIME:
+                case INPUT_TYPE_BOOL:
                     $var = 0;
                     break;
-                case TYPE_STR:
-                case TYPE_NOHTML:
-                case TYPE_NOTRIM:
-
+                case INPUT_TYPE_STR:
+                case INPUT_TYPE_NOHTML:
+                case INPUT_TYPE_NOTRIM:
                     $var = '';
                     break;
-                case TYPE_ARRAY:
-                case TYPE_FILE:
-
+                case INPUT_TYPE_ARRAY:
+                case INPUT_TYPE_FILE:
                     $var = [];
                     break;
                 default:
-
                     $var = null;
                     break;
             }
@@ -166,35 +185,35 @@ class Request
         static $booltypes = ['1', 'yes', 'y', 'true'];
 
         switch ($type) {
-            case TYPE_INT:
+            case INPUT_TYPE_INT:
                 $data = intval($data);
                 break;
-            case TYPE_UINT:
+            case INPUT_TYPE_UINT:
                 $data = ($data = intval($data)) < 0 ? 0 : $data;
                 break;
-            case TYPE_NUM:
+            case INPUT_TYPE_NUM:
                 $data = strval($data) + 0;
                 break;
-            case TYPE_UNUM:
+            case INPUT_TYPE_UNUM:
                 $data = (($data = strval($data) + 0) < 0) ? 0 : $data;
                 break;
-            case TYPE_BINARY:
-            case TYPE_NOTRIM:
+            case INPUT_TYPE_BINARY:
+            case INPUT_TYPE_NOTRIM:
                 $data = strval($data);
                 break;
-            case TYPE_STR:
+            case INPUT_TYPE_STR:
                 $data = trim(strval($data));
                 break;
-            case TYPE_NOHTML:
+            case INPUT_TYPE_NOHTML:
                 $data = htmlentities(trim(strval($data)), ENT_QUOTES);
                 break;
-            case TYPE_BOOL:
+            case INPUT_TYPE_BOOL:
                 $data = in_array(strtolower($data), $booltypes) ? 1 : 0;
                 break;
-            case TYPE_ARRAY:
+            case INPUT_TYPE_ARRAY:
                 $data = (is_array($data)) ? $data : [];
                 break;
-            case TYPE_FILE:
+            case INPUT_TYPE_FILE:
 
                 // perhaps redundant :p
                 if (is_array($data)) {
@@ -224,7 +243,7 @@ class Request
                     ];
                 }
                 break;
-            case TYPE_UNIXTIME:
+            case INPUT_TYPE_UNIXTIME:
 
                 if (is_array($data)) {
                     $data = array_map('intval', $data);
@@ -241,16 +260,16 @@ class Request
                         $data = 0;
                     }
                 } else {
-                    $data = self::clean($data, TYPE_UINT);
+                    $data = static::clean($data, INPUT_TYPE_UINT);
                 }
                 break;
         }
 
         // strip out characters that really have no business being in non-binary data
         switch ($type) {
-            case TYPE_STR:
-            case TYPE_NOTRIM:
-            case TYPE_NOHTML:
+            case INPUT_TYPE_STR:
+            case INPUT_TYPE_NOTRIM:
+            case INPUT_TYPE_NOHTML:
                 $data = str_replace(chr(0), '', $data);
         }
 
@@ -258,21 +277,13 @@ class Request
     }
 
     /**
-     * Fetches the requested URI (path and query string)
-     *
-     * @return string
-     */
-    public static function uri()
-    {
-        return neo()->request->getRequestUri();
-    }
-
-    /**
      * fetch url of current page without the query string
+     * 
+     * @return string The url of current page
      */
-    public static function script()
+    public function script()
     {
-        $script_path = self::uri();
+        $script_path = $this->getRequestUri();;
 
         $quest_pos = strpos($script_path, '?');
 
@@ -282,76 +293,32 @@ class Request
     /**
      * Fetches an alternate IP address of the current visitor
      *
-     * @return string
+     * @return string The alternate IP
      */
-    public static function altIp()
+    public function altIp()
     {
-        $ips = neo()->request->getClientIps();
+        $ips = $this->getClientIps();
 
         return $ips[1] ?? $ips[0];
     }
 
     /**
-     * Fetches the IP address of the current visitor, attempting to detect proxies etc.
-     *
-     * @return string
-     */
-    public static function ip()
-    {
-        return neo()->request->getClientIp();
-    }
-
-    /**
      * Http Referer
      *
-     * @return string
+     * @return string The referer
      */
-    public static function referer()
+    public function referer()
     {
-        return neo()->request->headers->get('referer');
+        return $this->headers->get('referer');
     }
 
     /**
      * User Agent
      *
-     * @return null|string
+     * @return null|string The user agent
      */
-    public static function userAgent()
+    public function userAgent()
     {
-        return neo()->request->headers->get('user-agent');
-    }
-
-    /**
-     * Request Method
-     *
-     * @return null|string
-     */
-    public static function method()
-    {
-        return neo()->request->getMethod();
-    }
-
-    /**
-     * Http Host
-     */
-    public static function host()
-    {
-        return neo()->request->getHost();
-    }
-
-    /**
-     * Http Host with Port
-     */
-    public static function httpHost()
-    {
-        return neo()->request->getHttpHost();
-    }
-
-    /**
-     * Scheme: https or http
-     */
-    public static function scheme()
-    {
-        return neo()->request->getScheme();
+        return $this->headers->get('user-agent');
     }
 }

@@ -4,13 +4,14 @@ namespace Neo\Database;
 
 use Neo\NeoFrame;
 use Neo\Str;
+use NilPortugues\Sql\QueryFormatter\Formatter;
 
 /**
  * Class MySQLExplain
  *
  * 复制了VBB的Explain类，并作改动
  */
-class MySQLExplain extends MySQLi
+class MySQLExplain extends MySQL
 {
     public $message = '';
 
@@ -29,8 +30,6 @@ class MySQLExplain extends MySQLi
      */
     public function __construct()
     {
-        parent::__construct();
-
         $this->time_start = microtime(true);
 
         $this->header();
@@ -56,21 +55,33 @@ class MySQLExplain extends MySQLi
     /**
      * {@inheritdoc}
      */
-    public function execute(string $sql)
+    public function execute(string $sql = null)
     {
-        $this->sql = trim($sql);
-
-        if (stripos($this->sql, 'select') === 0) {
-            $this->explain($this->sql);
-        } else {
-            $this->output("<pre>{$this->sql}</pre>");
-        }
+        $sql = trim($sql);
 
         $this->timerStart('SQL Query');
-        $return = parent::execute($sql);
+        $stmt = parent::execute($sql);
+
+        // 从PDO中解析出SQL，然后再explain
+        if (method_exists($stmt, 'debugDumpParams')) {
+            $sql = parent::getSQLFromDebugDumpParams($stmt);
+        } else {
+            $binds = [];
+            foreach ($this->getBinds() as $bind) {
+                if (! is_int($bind)) {
+                    $binds[] = $this->quote($bind);
+                } else {
+                    $binds[] = $bind;
+                }
+            }
+            $sql = vsprintf(str_ireplace('?', '%s', $sql), $binds);
+        }
+
+        $this->parseExplain($sql);
+
         $this->timerStop();
 
-        return $return;
+        return $stmt;
     }
 
     /**
@@ -96,24 +107,22 @@ class MySQLExplain extends MySQLi
 				<meta charset="' . NeoFrame::charset() . '">
 				<title>NeoFrame</title>
 				<style type="text/css">
-				<!--
-				body { color: black; background-color: #FFF; }
-				body, p, td, th { font-family: verdana, sans-serif; font-size: 10pt; text-align: left; }
-				th { background: #F6F6F6; border-left: 1px solid #DDDDDD; }
-				td { border-left: 1px solid #DDDDDD; border-top: 1px solid #DDDDDD; }
-				div, pre, table { border: 1px solid #dddddd; border-collapse: separate; *border-collapse: collapse; border-left: 0;-webkit-border-radius: 4px; -moz-border-radius: 4px;border-radius: 4px; }
-				pre { padding: 8px; border-left: 1px solid #DDDDDD; }
-				div.explain { border: 1px solid #CCC; margin-bottom: 16px; }
-				div.explaintitle { color: black; background-color: white; padding: 4px; font-weight: bold; border-bottom: 1px solid #CCC; }
-				div.explainbody { padding: 8px; color: black; background-color: white; }
-				-->
+                    body { color: black; background-color: #FFF; }
+                    body, p, td, th { font-family: verdana, sans-serif; font-size: 10pt; text-align: left; }
+                    th { background: #F6F6F6; border-left: 1px solid #DDDDDD; }
+                    td { border-left: 1px solid #DDDDDD; border-top: 1px solid #DDDDDD; }
+                    div, pre, table { border: 1px solid #dddddd; border-collapse: separate; *border-collapse: collapse; border-left: 0;-webkit-border-radius: 4px; -moz-border-radius: 4px;border-radius: 4px; }
+                    pre { padding: 8px; border-left: 1px solid #DDDDDD; }
+                    div.explain { border: 1px solid #CCC; margin-bottom: 16px; }
+                    div.explaintitle { color: black; background-color: white; padding: 4px; font-weight: bold; border-bottom: 1px solid #CCC; }
+                    div.explainbody { padding: 8px; color: black; background-color: white; }
 				</style>
 			</head>
 			<body>';
     }
 
     /**
-     * @param $str
+     * @param string $str
      */
     private function output($str)
     {
@@ -123,23 +132,32 @@ class MySQLExplain extends MySQLi
     /**
      * explain
      *
-     * @param $sql
+     * @param string $sql
      */
-    private function explain($sql)
+    private function parseExplain($sql)
     {
-        $results = $this->simpleQuery('EXPLAIN ' . $sql);
+        $results = stripos($sql, 'select') === 0 ? parent::explain($sql) : [];
 
-        $this->output('<pre>' . preg_replace('#\s+#', ' ', $sql) . '</pre>');
+        $sql = preg_replace('#\s+#', ' ', $sql);
+        if (neo()->getExplainSQL() == 2) {
+            $sql = (new Formatter())->format($sql);
+        }
+
+        $this->output("<pre>{$sql}</pre>");
+
+        if (! $results) {
+            return;
+        }
+
         $this->output('<table style="width:100%"><tr>');
-        while ($field = mysqli_fetch_field($results)) {
-            $this->output('<th>' . $field->name . '</th>');
+        foreach (array_keys($results[0]) as $field) {
+            $this->output('<th>' . $field . '</th>');
         }
         $this->output('</tr>');
-        $numfields = mysqli_num_fields($results);
-        while ($result = $this->fetchRow($results)) {
+        foreach ($results as $result) {
             $this->output('<tr>');
-            for ($i = 0; $i < $numfields; ++$i) {
-                $this->output('<td>' . ($result["{$i}"] == '' ? '&nbsp;' : $result["{$i}"]) . '</td>');
+            foreach ($result as $row) {
+                $this->output('<td>' . ($row ?: '&nbsp;') . '</td>');
             }
             $this->output('</tr>');
         }
@@ -152,10 +170,7 @@ class MySQLExplain extends MySQLi
     private function timerStart($str = '')
     {
         $this->message_title = $str;
-
-        if (function_exists('memory_get_usage')) {
-            $this->memory_before = memory_get_usage();
-        }
+        $this->memory_before = memory_get_usage();
         $this->time_before = microtime(true);
     }
 
@@ -195,12 +210,9 @@ class MySQLExplain extends MySQLi
             $this->output('Memory Used: ' . Str::byteFormat($memory_after - $this->memory_before) . '</p>');
         }
 
-        $output = '<div class="explain">
-			<div class="explaintitle">' . $this->message_title . "</div>
-			<div class=\"explainbody\">{$this->message}</div>
-		</div>";
+        $output = '<div class="explain"><div class="explaintitle">%s</div><div class="explainbody">%s</div></div>';
+        echo sprintf($output, $this->message_title, $this->message);
 
-        echo $output;
         $this->message = '';
 
         flush();
@@ -226,16 +238,12 @@ class MySQLExplain extends MySQLi
         $explain = sprintf(
             $explain,
             $totaltime,
-            neo()->db->getQueryCount(),
+            db(false)->getQueryCount(),
             Str::byteFormat(memory_get_usage(), 3),
             $includedFileCount,
             implode(
                 '',
-                preg_replace(
-                    ['#' . NeoFrame::getAbsPath() . '#si', '#^(.*)$#si'],
-                    ['', '<li>\1</li>'],
-                    $get_included_files
-                )
+                preg_replace('#^(.*)$#si', '<li>\1</li>', array_map('removeSysPath', $get_included_files))
             )
         );
 

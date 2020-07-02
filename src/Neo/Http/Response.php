@@ -2,10 +2,12 @@
 
 namespace Neo\Http;
 
+use  Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+
 /**
  * Html 工具类
  */
-class Response
+class Response extends SymfonyResponse
 {
     /**
      * Set HTTP Status Header
@@ -13,13 +15,13 @@ class Response
      * @param int    $code    the response code
      * @param string $content the response content
      *
-     * @return \Symfony\Component\HttpFoundation\Response
+     * @return SymfonyResponse
      */
-    public static function send(?int $code = null, ?string $content = null)
+    public function sendData(?int $code = null, ?string $content = null)
     {
         $code || $code = 200;
 
-        return neo()->response->prepare(neo()->request)
+        return $this->prepare(neo()->getRequest())
             ->setStatusCode($code)
             ->setContent($content)
             ->send();
@@ -31,7 +33,7 @@ class Response
      * @param int  $maxage
      * @param bool $credentials
      */
-    public static function sendAccessControlHeaders(int $maxage = 86400, bool $credentials = false)
+    public function sendAccessControlHeaders(int $maxage = 86400, bool $credentials = false)
     {
         $access_control_allow_methods = [
             'OPTIONS',
@@ -49,7 +51,7 @@ class Response
             'X-API-Version',
         ];
 
-        $headers = neo()->response->headers;
+        $headers = $this->headers;
 
         $headers->set('Access-Control-Max-Age', $maxage);
         $headers->set('Access-Control-Allow-Origin', '*');

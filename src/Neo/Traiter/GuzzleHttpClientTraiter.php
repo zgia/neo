@@ -29,7 +29,7 @@ trait GuzzleHttpClientTraiter
     private $reload = false;
 
     /**
-     * @var \GuzzleHttp\Client
+     * @var GuzzleHttpClient
      */
     private $httpClient;
 
@@ -66,7 +66,7 @@ trait GuzzleHttpClientTraiter
     /**
      * Guzzle Http Client
      *
-     * @return \GuzzleHttp\Client
+     * @return GuzzleHttpClient
      */
     protected function getGuzzleHttpClient()
     {
@@ -114,7 +114,7 @@ trait GuzzleHttpClientTraiter
      *
      * @param string            $verb    POST, GET, DELETE, etc
      * @param string            $url     URL
-     * @param array             $options
+     * @param array             $options More options
      * @param bool              $origin  返回数据是否需要json_decode
      * @param ResponseInterface $result  Response对象
      *
@@ -130,12 +130,14 @@ trait GuzzleHttpClientTraiter
             /**
              * @var ResponseInterface $result
              */
-            $result = $this->getGuzzleHttpClient()->{$verb}($url, $options);
+            $result = $this->getGuzzleHttpClient()
+                ->{$verb}($url, $options);
 
-            $response = $result->getBody()->getContents();
+            $response = $result->getBody()
+                ->getContents();
 
             return $origin ? $response : json_decode($response, true);
-        } catch (RequestException $ex) {
+        } catch (RequestException | \Exception $ex) {
             throw $this->log($ex);
         }
     }
@@ -149,19 +151,26 @@ trait GuzzleHttpClientTraiter
      */
     protected function log($ex)
     {
-        $msg = Debug::simplifyException($ex);
+        $data = Debug::simplifyException($ex);
 
-        $msg['_request'] = \GuzzleHttp\Psr7\str($ex->getRequest());
-        if ($ex->hasResponse()) {
-            $msg['_response'] = \GuzzleHttp\Psr7\str($ex->getResponse());
+        if ($ex instanceof RequestException) {
+            $data['_request'] = \GuzzleHttp\Psr7\str($ex->getRequest());
+            if ($ex->hasResponse()) {
+                $data['_response'] = \GuzzleHttp\Psr7\str($ex->getResponse());
+            }
+
+            $data['_context'] = $ex->getHandlerContext();
+
+            // 是否超时？
+            $code = $data['_context']['errno'];
+            $msg = $data['_context']['error'] ?: $data['message'];
+        } else {
+            $code = $ex->getCode();
+            $msg = $ex->getMessage();
         }
 
-        $msg['_context'] = $ex->getHandlerContext();
+        NeoLog::error('guzzle', __FUNCTION__, $data);
 
-        $error = $msg['_context']['errno'] == 28 ? __('Access 3rd server timeout, please try again.') : $msg['message'];
-
-        NeoLog::error('guzzle', __FUNCTION__, $msg);
-
-        return new NeoException($error, $msg['_context']['errno'], $ex);
+        return new NeoException($msg, $code, $ex);
     }
 }

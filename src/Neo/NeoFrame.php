@@ -6,17 +6,16 @@ use Neo\Cache\Memcached\MemcachedNull;
 use Neo\Cache\Memcached\MemcachedStore;
 use Neo\Cache\Redis\Redis;
 use Neo\Cache\Redis\RedisNull;
+use Neo\Database\MySQL;
 use Neo\Database\MySQLExplain;
-use Neo\Database\MySQLi;
 use Neo\Database\NeoDatabase;
-use Neo\Database\PdoMySQL;
 use Neo\Exception\DatabaseException;
 use Neo\Exception\RedisException;
 use Neo\Exception\ResourceNotFoundException;
 use Neo\Html\Page;
-use Neo\Http\Request as NeoRequest;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Neo\Html\Template;
+use Neo\Http\Request;
+use Neo\Http\Response;
 
 /**
  * NeoFrame Container
@@ -28,105 +27,78 @@ class NeoFrame implements \ArrayAccess
      *
      * @var string
      */
-    protected static $ABSPATH = '';
+    private $abspath = '';
 
     /**
      * The container's bindings.
      *
      * @var array
      */
-    protected $bindings = [];
+    private $bindings = [];
 
     /**
      * Request object.
      *
-     * @var \Symfony\Component\HttpFoundation\Request
+     * @var Request
      */
     public $request;
 
     /**
      * Response object.
      *
-     * @var \Symfony\Component\HttpFoundation\Response
+     * @var Response
      */
     public $response;
 
     /**
      * Database object.
      *
-     * @var \Neo\Database\NeoDatabase
+     * @var NeoDatabase
      */
-    public $db;
+    private $db;
+
+    /**
+     * 是否使用MySQLExplain初始化数据库连接，在页面上显示SQL Explain信息
+     * 0: 不启用
+     * 1: 显示SQL Explain，SQL一行显示
+     * 2: 显示SQL Explain，SQL格式化显示
+     */
+    private $explainSQL = 0;
 
     /**
      * Redis object.
      *
-     * @var \Neo\Cache\Redis\Redis
+     * @var Redis
      */
-    public $redis;
-
-    /**
-     * Redis object.
-     *
-     * @var \Neo\Cache\Redis\Redis
-     */
-    public $redisslave;
+    private $redis;
 
     /**
      * MemcachedStore object.
      *
-     * @var \Neo\Cache\Memcached\MemcachedStore
+     * @var MemcachedStore
      */
-    public $memcached;
+    private $memcached;
 
     /**
      * 用于将变量传递给模版
      *
-     * @var array
+     * @var Template
      */
-    public $templateVars = [];
-
-    /**
-     * Internationalization
-     *
-     * @var array
-     */
-    public $i18n = [];
+    private $template;
 
     /**
      * User Information
      *
      * @var array
      */
-    public $user = [];
-
-    /**
-     * User ID
-     *
-     * @var int
-     */
-    public $userid = 0;
-
-    /**
-     * language
-     *
-     * @var array
-     */
-    public $lang = [];
+    private $user = [];
 
     /**
      * Array of system Config
      *
      * @var array
      */
-    public $config = [];
-
-    /**
-     * Array of data that has been cleaned by the input cleaner.
-     *
-     * @var array
-     */
-    public $input = [];
+    private $config = [];
 
     /**
      * 脚本开始时间
@@ -138,7 +110,7 @@ class NeoFrame implements \ArrayAccess
     /**
      * NeoFrame
      *
-     * @var \Neo\NeoFrame
+     * @var NeoFrame
      */
     private static $instance = null;
 
@@ -147,7 +119,7 @@ class NeoFrame implements \ArrayAccess
      *
      * @param null|string $absPath
      */
-    public function __construct(?string $absPath = null)
+    public function __construct(string $absPath = null)
     {
         // 当前时间戳
         define('TIMENOW', time());
@@ -158,14 +130,8 @@ class NeoFrame implements \ArrayAccess
         // Exception Handler
         set_exception_handler([$this, 'exceptionHandler']);
 
-        // 如果定义了常量
-        if (empty($absPath) && defined('ABSPATH') && ABSPATH) {
-            $absPath = ABSPATH;
-        }
-
-        if ($absPath) {
-            $this->setAbsPath($absPath);
-        }
+        // 系统所在目录
+        $this->setAbsPath($absPath);
 
         static::setInstance($this);
 
@@ -176,14 +142,12 @@ class NeoFrame implements \ArrayAccess
         $this->checkLoggerDir();
 
         // HTTP Request
-        $this->request = Request::createFromGlobals();
+        $this->getRequest();
 
         // HTTP Response
-        $this->response = new Response();
+        $this->getResponse();
 
-        $this->response->setCharset(static::charset());
-
-        $this->timeStart = (defined('NEO_TIMESTART') && NEO_TIMESTART) ? NEO_TIMESTART : microtime(true);
+        $this->timeStart = microtime(true);
     }
 
     /**
@@ -227,7 +191,7 @@ class NeoFrame implements \ArrayAccess
         $msg = "{$ex->getMessage()} " . PHP_EOL . "F: {$ex->getFile()} on line {$ex->getLine()} " . PHP_EOL . "H: {$host}";
         $title = __('The server is asleep, please wake it up.');
 
-        Page::neoDie(removeSystemPathFromFileName($msg), $title, $errors);
+        Page::neoDie(removeSysPath($msg), $title, $errors);
     }
 
     /**
@@ -235,7 +199,7 @@ class NeoFrame implements \ArrayAccess
      */
     public function unload()
     {
-        unset($this->db, $this->redis, $this->redisslave, $this->memcached, $this->request, $this->response);
+        unset($this->db, $this->redis, $this->memcached, $this->request, $this->response);
     }
 
     /**
@@ -245,12 +209,7 @@ class NeoFrame implements \ArrayAccess
      */
     public static function charset()
     {
-        $charset = 'utf-8';
-        if (defined('NEO_CHARSET') && NEO_CHARSET) {
-            $charset = NEO_CHARSET;
-        }
-
-        return $charset;
+        return (defined('NEO_CHARSET') && NEO_CHARSET) ? NEO_CHARSET : 'utf-8';
     }
 
     /**
@@ -260,12 +219,7 @@ class NeoFrame implements \ArrayAccess
      */
     public static function language()
     {
-        $lang = 'zh-CN';
-        if (defined('NEO_LANG') && NEO_LANG) {
-            $lang = NEO_LANG;
-        }
-
-        return $lang;
+        return (defined('NEO_LANG') && NEO_LANG) ? NEO_LANG : 'zh-CN';
     }
 
     /**
@@ -285,7 +239,7 @@ class NeoFrame implements \ArrayAccess
      */
     public function setAbsPath($absPath)
     {
-        static::$ABSPATH = rtrim($absPath, '\/');
+        $this->abspath = rtrim($absPath, '\/');
 
         $this->setPaths();
     }
@@ -295,9 +249,9 @@ class NeoFrame implements \ArrayAccess
      *
      * @return string
      */
-    public static function getAbsPath()
+    public function getAbsPath()
     {
-        return static::$ABSPATH;
+        return $this->abspath;
     }
 
     /**
@@ -306,19 +260,19 @@ class NeoFrame implements \ArrayAccess
     public function setPaths()
     {
         // 控制器路径
-        $this->bindings['controllers_dir'] = static::getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Controller';
+        $this->bindings['controllers_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Controller';
 
         // 模版文件路径
-        $this->bindings['templates_dir'] = static::getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'View';
+        $this->bindings['templates_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'View';
 
         // 语言文件路径
-        $this->bindings['languages_dir'] = static::getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Language';
+        $this->bindings['languages_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Language';
 
         // 数据缓存路径
-        $this->bindings['datastore_dir'] = static::getAbsPath() . DIRECTORY_SEPARATOR . 'datastore';
+        $this->bindings['datastore_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'datastore';
 
         // 资源文件路径
-        $this->bindings['content_dir'] = static::getAbsPath() . DIRECTORY_SEPARATOR . 'public';
+        $this->bindings['content_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'public';
 
         // 日志文件存放路径
         if (defined('NEO_LOG_DIR') && NEO_LOG_DIR) {
@@ -346,37 +300,67 @@ class NeoFrame implements \ArrayAccess
     }
 
     /**
-     * 把变量传到模版中
+     * 当前登录用户
      *
-     * @param array $elements 变量
+     * @param array $user
      */
-    public function setTemplateVars(array $elements)
+    public function setUser(array $user)
     {
-        if (empty($elements)) {
-            return;
-        }
-
-        if (! is_array($this->templateVars)) {
-            $this->templateVars = [];
-        }
-
-        $this->templateVars = array_merge($this->templateVars, $elements);
+        $this->user = $user;
     }
 
     /**
-     * 获取数据库连接
+     * 当前登录用户
      *
-     * @param bool $init 如果没有链接，则初始化
-     *
-     * @return Database\MySQLi|Database\NeoDatabase|Database\PdoMySQL
+     * @return array
      */
-    public function getDB(bool $init = true)
+    public function getUser()
     {
-        if ($init && (! $this->db || ! $this->db instanceof NeoDatabase)) {
-            $this->db = static::initDatabase($this->config['database']['mysql']);
+        return $this->user;
+    }
+
+    /**
+     * 获取模板引擎
+     *
+     * @return Template
+     */
+    public function getTemplate()
+    {
+        if ($this->template === null) {
+            $this->template = new Template();
         }
 
-        return $this->db;
+        return $this->template;
+    }
+
+    /**
+     * 获取Neo Request
+     *
+     * @return Request
+     */
+    public function getRequest()
+    {
+        if ($this->request === null) {
+            $this->request = Request::createFromGlobals();
+        }
+
+        return $this->request;
+    }
+
+    /**
+     * 获取Neo Response
+     *
+     * @return Response
+     */
+    public function getResponse()
+    {
+        if ($this->response === null) {
+            $this->response = new Response();
+
+            $this->response->setCharset(static::charset());
+        }
+
+        return $this->response;
     }
 
     /**
@@ -386,19 +370,25 @@ class NeoFrame implements \ArrayAccess
      *
      * @return null|array|string
      */
-    public static function getConfig(?string $key = null)
+    public function getConfig(?string $key = null)
     {
-        static $config = null;
-
-        if ($config === null) {
-            $config = (array) static::getInstance()->config;
-        }
+        $config = (array) $this->config;
 
         if ($key) {
             return $config[$key] ?? null;
         }
 
         return $config;
+    }
+
+    /**
+     * 添加配置文件
+     *
+     * @param array $config
+     */
+    public function setConfig(array $config)
+    {
+        $this->config = $config;
     }
 
     /**
@@ -433,69 +423,71 @@ class NeoFrame implements \ArrayAccess
      * @param array $config    数据库参数
      * @param bool  $withSlave 是否启用从数据库
      *
-     * @return null|MySQLExplain|MySQLi|PdoMySQL
+     * @return null|MySQL|MySQLExplain
      */
     public static function initDatabase(array $config, bool $withSlave = true)
     {
-        $neo = neo();
-
-        // 是否显示当前页面的数据库查询信息
-        if ($neo['explain_sql']) {
+        // 是否在页面上显示SQL Explain信息
+        if (neo()->getExplainSQL()) {
             $db = new MySQLExplain();
         } else {
             switch ($config['driver']) {
-            case 'pdo_mysql':
-                $db = new PdoMySQL();
-                break;
-            case 'mysqli':
-                $db = new MySQLi();
-                break;
-            default:
-                $db = null;
-                break;
-        }
+                case 'pdo_mysql':
+                case 'mysqli':
+                    $db = new MySQL();
+                    break;
+                default:
+                    $db = null;
+                    break;
+            }
         }
 
         if ($db == null) {
             throw new DatabaseException(__f('Invalid mysql driver %s.', $config['driver']));
         }
 
-        // 是否使用数据库代理
-        $useDBProxy = $config['proxy'] ?? false;
-
-        $master = $config['master'];
-        $slaves = $config['slaves'] ?? [];
-        unset($config['master'], $config['slaves']);
-
-        // 从库
-        if (! $useDBProxy && $withSlave && $slaves) {
-            $index = 0;
-
-            // 根据IP在多个从数据库切换
-            $hosts = (array) $slaves['host'];
-
-            $slaveCount = count($hosts);
-            if ($slaveCount > 1) {
-                $index = ord(md5(NeoRequest::ip())[0]) % $slaveCount;
-            }
-            // 用于日志
-            $neo['dbSlaveIndex'] = $index;
-
-            // 从库配置
-            $db->slaveConfig = $config;
-
-            $db->slaveConfig['host'] = $hosts[$index];
-        }
+        $config['withSlave'] = $withSlave;
 
         // 创建数据库连接
-        $config['host'] = $master['host'];
-        $config['port'] = (int) $config['port'];
-
         $db->connect($config);
-        $db->setUseDBProxy($useDBProxy);
-        $db->setTablePrefix($config['prefix']);
 
         return $db;
+    }
+
+    /**
+     * 获取数据库连接
+     *
+     * @param bool $init 如果没有链接，则初始化
+     *
+     * @return MySQL|NeoDatabase
+     */
+    public function getDB(bool $init = true)
+    {
+        if ($init && (! $this->db || ! $this->db instanceof NeoDatabase)) {
+            $this->db = static::initDatabase($this->config['database']['mysql']);
+        }
+
+        return $this->db;
+    }
+
+    /**
+     * 是否使用MySQLExplain初始化数据库连接，在页面上显示SQL Explain信息
+     *
+     * @param int $ex
+     */
+    public function setExplainSQL(int $ex = 0)
+    {
+        $this->explainSQL = $ex;
+    }
+
+    /**
+     * 是否使用MySQLExplain初始化数据库连接，在页面上显示SQL Explain信息
+     *
+     * @return int
+     */
+    public function getExplainSQL()
+    {
+        return $this->explainSQL;
     }
 
     /**
@@ -506,27 +498,43 @@ class NeoFrame implements \ArrayAccess
      *
      * @return null|Redis|RedisNull
      */
-    public static function initRedis($app, string $type = 'master')
+    public static function initRedis($app = 'neo', string $type = 'master')
     {
-        if (defined('NEO_REDIS') && NEO_REDIS) {
-            $redis = null;
+        $redis = null;
 
-            try {
-                Redis::addServer((array) NeoFrame::getConfig('redis')[$app]);
+        try {
+            Redis::addServer((array) static::getInstance()->getConfig('redis')[$app]);
 
-                $redis = Redis::getInstance($type);
-            } catch (RedisException $ex) {
-                NeoLog::error('redis', __FUNCTION__, $ex);
-            }
+            $redis = Redis::getInstance($type);
+        } catch (RedisException $ex) {
+            NeoLog::error('redis', __FUNCTION__, $ex);
+        }
 
-            if (! $redis instanceof Redis || $redis->isWentAway()) {
-                $redis = new RedisNull();
-            }
-        } else {
+        if (! $redis instanceof Redis || $redis->isDown()) {
             $redis = new RedisNull();
         }
 
         return $redis;
+    }
+
+    /**
+     * 设置Redis
+     *
+     * @param Redis $redis
+     */
+    public function setRedis(Redis $redis)
+    {
+        $this->redis = $redis;
+    }
+
+    /**
+     * 获取Redis
+     *
+     * @return Redis|RedisNull
+     */
+    public function getRedis()
+    {
+        return $this->redis;
     }
 
     /**
@@ -538,17 +546,23 @@ class NeoFrame implements \ArrayAccess
      */
     public static function initMemcached(string $type = 'master')
     {
-        if (defined('NEO_MEMCACHED') && NEO_MEMCACHED) {
-            $memcached = MemcachedStore::getInstance($type);
+        $memcached = MemcachedStore::getInstance($type);
 
-            if (! $memcached instanceof MemcachedStore || $memcached->isWentAway()) {
-                $memcached = new MemcachedNull();
-            }
-        } else {
+        if (! $memcached instanceof MemcachedStore || $memcached->isDown()) {
             $memcached = new MemcachedNull();
         }
 
         return $memcached;
+    }
+
+    /**
+     * Get Memcached
+     *
+     * @return MemcachedStore
+     */
+    public function getMemcached()
+    {
+        return $this->memcached;
     }
 
     /**

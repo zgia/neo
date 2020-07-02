@@ -15,7 +15,7 @@ class RedisNull implements CacheInterface
      * Redis 挂了吗?
      * @return bool
      */
-    public function isWentAway()
+    public function isDown()
     {
         return true;
     }
@@ -23,7 +23,7 @@ class RedisNull implements CacheInterface
     /**
      * @return $this
      */
-    public function getRedis()
+    public function getPhpRedis()
     {
         return $this;
     }
