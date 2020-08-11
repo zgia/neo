@@ -3,8 +3,6 @@
 namespace Neo\Cache\Redis;
 
 use Neo\Cache\CacheInterface;
-use Neo\Exception\NeoException;
-use Neo\Exception\RedisException;
 
 /**
  * Class Redis
@@ -31,6 +29,7 @@ class Redis implements CacheInterface
 
     /**
      * Redis 挂了吗?
+     *
      * @return bool
      */
     public function isDown()
@@ -47,29 +46,17 @@ class Redis implements CacheInterface
     }
 
     /**
-     * @param $val
-     *
-     * @return mixed
-     */
-    public static function jsonDecode($val)
-    {
-        return \json_decode($val, true, 512, JSON_BIGINT_AS_STRING);
-    }
-
-    /**
      * 获取
      *
-     * @param string $key
+     * @param string $key 键名称
      *
      * @return null|array
      */
-    public function get($key)
+    public function get(string $key)
     {
         $value = $this->phpRedis->get($key);
 
-        $value && $value = static::jsonDecode($value);
-
-        return $value ?: null;
+        return $value ? jsonDecode($value) : null;
     }
 
     /**
@@ -77,13 +64,13 @@ class Redis implements CacheInterface
      *
      * @see https://github.com/phpredis/phpredis#set
      *
-     * @param string    $key
-     * @param mixed     $value
+     * @param string    $key     键名称
+     * @param mixed     $value   值
      * @param array|int $expired 有效期，秒；或者NX|XX数组，['nx', 'ex'=>60]
      *
      * @return bool
      */
-    public function set($key, $value, $expired = 0)
+    public function set(string $key, $value, $expired = 0)
     {
         if (is_array($expired) && $expired) {
             // nothing
@@ -97,9 +84,9 @@ class Redis implements CacheInterface
     }
 
     /**
-     * 批零设置多个
+     * 批零设置多个值
      *
-     * @param array $data
+     * @param array $data 值
      */
     public function mset(array $data)
     {
@@ -111,13 +98,15 @@ class Redis implements CacheInterface
     }
 
     /**
-     *Push
+     * 添加值到列表的左侧
      *
-     * @param string $key
-     * @param mixed  $value
+     * @param string $key   列表名称
+     * @param mixed  $value 值
      * @param bool   $batch true表示批量push多个值
+     *
+     * @return bool|int 成功返回列表长度，失败返回FALSE
      */
-    public function push($key, $value, $batch = false)
+    public function push(string $key, $value, bool $batch = false)
     {
         if ($batch) {
             if (! is_array($value)) {
@@ -128,40 +117,58 @@ class Redis implements CacheInterface
         }
         $value = array_map('json_encode', $value);
 
-        $this->phpRedis->lPush($key, ...$value);
+        return $this->phpRedis->lPush($key, ...$value);
     }
 
     /**
-     * @param string $key
+     * 弹出列表的（右）值
+     *
+     * @param string $key     列表名称
+     * @param int    $timeout 超时时间，如果设置，则使用阻塞弹出
      *
      * @return null|int|mixed|string
      */
-    public function pop($key)
+    public function pop(string $key, int $timeout = 0)
     {
-        $value = $this->phpRedis->rPop($key);
+        if ($timeout === 0) {
+            $value = $this->phpRedis->rPop($key);
+        } else {
+            $value = null;
 
-        if (! is_null($value)) {
-            return static::jsonDecode($value);
+            $tmp = $this->phpRedis->brPop($key, $timeout);
+            if (is_array($tmp) && $tmp[0] === $key) {
+                $value = $tmp[1] ?? null;
+            }
         }
 
-        return null;
+        return $value ? jsonDecode($value) : null;
     }
 
     /**
-     * @param string $key
-     * @param int    $timeout
+     * 闭包方式实现互斥锁
      *
-     * @return null|int|mixed|string
+     * @param callable $callable 闭包方法
+     * @param string   $key      锁名称
+     * @param int      $timeout  锁超时时间，超过时间锁自动失效，单位毫秒
+     *
+     * @throws RedisException 失败时抛出异常信息
+     * @return mixed          成功时返回闭包函数的返回值
      */
-    public function bPop($key, $timeout)
+    public function lock(callable $callable, string $key, int $timeout = 3000)
     {
-        $value = $this->phpRedis->brPop($key, $timeout);
+        try {
+            $locked = $this->phpRedis->psetex($key, $timeout, 1);
 
-        if (! is_null($value)) {
-            return static::jsonDecode($value[1]);
+            if ($locked === false) {
+                throw new RedisException(__('Failed to grab redis lock'));
+            }
+
+            return call_user_func($callable);
+        } catch (\Exception $ex) {
+            throw new RedisException($ex->getMessage(), $ex->getCode(), $ex);
+        } finally {
+            $this->phpRedis->del($key);
         }
-
-        return null;
     }
 
     /**
@@ -304,7 +311,7 @@ class Redis implements CacheInterface
      * @param string $method
      * @param array  $args
      *
-     * @throws NeoException
+     * @throws RedisException
      * @return mixed
      */
     public function __call($method, $args)
@@ -313,7 +320,7 @@ class Redis implements CacheInterface
             return false;
         }
         if (! method_exists($this->phpRedis, $method)) {
-            throw new NeoException("Class Redis not have method ({$method}) ");
+            throw new RedisException("Class Redis not have method ({$method}) ");
         }
 
         return call_user_func_array([$this->phpRedis, $method], $args);

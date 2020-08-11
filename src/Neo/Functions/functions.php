@@ -2,34 +2,24 @@
 
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
+use Neo\Config;
+use Neo\Database\AbstractDatabase;
 use Neo\Database\MySQL;
 use Neo\Database\MySQLExplain;
-use Neo\Database\NeoDatabase;
 use Neo\Debug;
-use Neo\Html\Page;
 use Neo\Http\Request;
 use Neo\I18n;
-use Neo\NeoFrame;
+use Neo\Neo;
 use Neo\Utility;
 
-// 时区
-if (! defined('DATETIME_ZONE')) {
-    define('DATETIME_ZONE', null);
-}
-
-// 时区偏移
-if (! defined('TIMEZONE_OFFSET')) {
-    define('TIMEZONE_OFFSET', null);
-}
-
 /**
- * 返回NeoFrame实例
+ * 返回Neo实例
  *
- * @return NeoFrame
+ * @return Neo
  */
 function neo()
 {
-    return NeoFrame::getInstance();
+    return Neo::getInstance();
 }
 
 /**
@@ -37,7 +27,7 @@ function neo()
  *
  * @param bool $init 如果没有链接，则初始化
  *
- * @return MySQL|NeoDatabase
+ * @return AbstractDatabase|MySQL
  */
 function db(bool $init = true)
 {
@@ -58,7 +48,7 @@ function input(string $gpc, array $variables)
 
     $params = $request->cleanGPC($gpc, $variables);
 
-    return $request->setParams($params);
+    return $request->mergeParams($params);
 }
 
 /**
@@ -117,14 +107,25 @@ function getExecutionTime(float $start = 0)
 }
 
 /**
+ * @param $val
+ *
+ * @return mixed
+ */
+function jsonDecode($val)
+{
+    return \json_decode($val, true, 512, JSON_BIGINT_AS_STRING);
+}
+
+/**
  * 载入类
  *
  * @param string $class     类名
  * @param string $namespace 命名空间
+ * @param bool   $refresh   是否重新生成实例
  *
  * @return mixed
  */
-function loadClass(string $class, string $namespace = null)
+function loadClass(string $class, string $namespace = null, bool $refresh = false)
 {
     static $_classes = [];
 
@@ -136,7 +137,7 @@ function loadClass(string $class, string $namespace = null)
     $classK = $namespace . '\\' . $className;
 
     // 如果类已实例化
-    if (isset($_classes[$classK])) {
+    if (! $refresh && isset($_classes[$classK])) {
         return $_classes[$classK];
     }
 
@@ -181,21 +182,23 @@ function _e(string $text)
 
 /**
  * 格式化输出短语
+ *
+ * @param array $args
  */
-function _f()
+function _f(...$args)
 {
-    echo __f(...func_get_args());
+    echo __f(...$args);
 }
 
 /**
  * 返回格式化后的已经翻译的短语
  *
+ * @param array $args
+ *
  * @return string 已经翻译的短语
  */
-function __f()
+function __f(...$args)
 {
-    $args = func_get_args();
-
     if (empty($args)) {
         return '';
     }
@@ -203,8 +206,7 @@ function __f()
         return __($args[0]);
     }
 
-    $str = $args[0];
-    unset($args[0]);
+    $str = array_shift($args);
 
     return vsprintf(__($str), $args);
 }
@@ -219,7 +221,7 @@ function __f()
  */
 function carbon(?string $tz = null, ?bool $immutable = false)
 {
-    $tz || $tz = getDatetimeZone();
+    $tz || $tz = getDatetimeZoneStr();
 
     return $immutable ? CarbonImmutable::now($tz) : Carbon::now($tz);
 }
@@ -227,15 +229,21 @@ function carbon(?string $tz = null, ?bool $immutable = false)
 /**
  * 获取时区
  *
- * @return string
+ * @return \DateTimeZone
  */
 function getDatetimeZone()
 {
-    if (defined('DATETIME_ZONE') && ! is_null(DATETIME_ZONE)) {
-        return DATETIME_ZONE;
-    }
+    return timezone_open(getDatetimeZoneStr());
+}
 
-    return date_default_timezone_get() ?: 'UTC';
+/**
+ * 获取时区
+ *
+ * @return string
+ */
+function getDatetimeZoneStr()
+{
+    return Config::get('datetime', 'zone') ?: (date_default_timezone_get() ?: 'UTC');
 }
 
 /**
@@ -245,11 +253,7 @@ function getDatetimeZone()
  */
 function getTimezoneOffset()
 {
-    if (defined('TIMEZONE_OFFSET') && ! is_null(TIMEZONE_OFFSET)) {
-        return TIMEZONE_OFFSET;
-    }
-
-    return timezone_offset_get(timezone_open(getDatetimeZone()), date_create());
+    return Config::get('datetime', 'offset') ?: timezone_offset_get(getDatetimeZone(), date_create());
 }
 
 /**
@@ -262,14 +266,13 @@ function getTimezoneOffset()
  */
 function stringToUtcTime(string $str, int $time = 0)
 {
-    $time || $time = time();
-    $t = strtotime($str, $time);
+    $t = strtotime($str, $time ?: time());
 
     return $t ? $t - getTimezoneOffset() : 0;
 }
 
 /**
- * 按照预订格式显示时间
+ * 在预设时区getDatetimeZone()下，格式化显示时间
  *
  * @param string $format    格式
  * @param int    $timestamp 时间
@@ -308,21 +311,21 @@ function formatDate(string $format = 'Ymd', int $timestamp = 0, int $yestoday = 
         } elseif ($timediff < 60) {
             $returndate = __('1 minute before');
         } elseif ($timediff < 3600) {
-            $returndate = sprintf(__('%d minutes before'), intval($timediff / 60));
+            $returndate = __f('%d minutes before', intval($timediff / 60));
         } elseif ($timediff < 7200) {
             $returndate = __('1 hour before');
         } elseif ($timediff < 86400) {
-            $returndate = sprintf(__('%d hours before'), intval($timediff / 3600));
+            $returndate = __f('%d hours before', intval($timediff / 3600));
         } elseif ($timediff < 172800) {
             $returndate = __('1 day before');
         } elseif ($timediff < 604800) {
-            $returndate = sprintf(__('%d days before'), intval($timediff / 86400));
+            $returndate = __f('%d days before', intval($timediff / 86400));
         } elseif ($timediff < 1209600) {
             $returndate = __('1 week before');
         } elseif ($timediff < 3024000) {
-            $returndate = sprintf(__('%d weeks before'), intval($timediff / 604900));
+            $returndate = __f('%d weeks before', intval($timediff / 604900));
         } elseif ($timediff < 15552000) {
-            $returndate = sprintf(__('%d months before'), intval($timediff / 2592000));
+            $returndate = __f('%d months before', intval($timediff / 2592000));
         } else {
             $returndate = $carbon->format($format);
         }
@@ -356,7 +359,7 @@ function isBrowser(string $browserName = '')
 
     if (! $browser) {
         // 忽略大小写
-        $ua = ' ' . strtolower($_SERVER['HTTP_USER_AGENT']);
+        $ua = ' ' . strtolower(neo()->getRequest()->userAgent());
 
         // Humans / Regular Users
         if (strpos($ua, 'opera') || strpos($ua, 'opr/')) {
@@ -427,40 +430,6 @@ function isBrowser(string $browserName = '')
 /**
  * 将输出内容数组转为JSON格式输出显示
  *
- * @param string $msg        消息
- * @param int    $code       错误码
- * @param int    $statusCode Http状态码
- */
-function printErrorJSON(string $msg, int $code = 1, int $statusCode = 200)
-{
-    $jsonarray = [
-        'code' => $code,
-        'msg' => $msg,
-    ];
-
-    printOutJSON($jsonarray, $statusCode);
-}
-
-/**
- * 将输出内容数组转为JSON格式输出显示
- *
- * @param string $msg        消息
- * @param int    $code       错误码
- * @param int    $statusCode Http状态码
- */
-function printSuccessJSON(string $msg, int $code = 0, int $statusCode = 200)
-{
-    $jsonarray = [
-        'code' => $code,
-        'msg' => $msg,
-    ];
-
-    printOutJSON($jsonarray, $statusCode);
-}
-
-/**
- * 将输出内容数组转为JSON格式输出显示
- *
  * @param array $jsonarray  输出数据
  * @param int   $statusCode Http状态码
  */
@@ -476,39 +445,6 @@ function printOutJSON(array $jsonarray, int $statusCode = 200)
 }
 
 /**
- * 显示提示信息
- *
- * @param string $message 显示的信息
- * @param string $url     页面跳转地址
- * @param bool   $back    是否显示后退链接
- */
-function displayMessage(string $message, string $url = '', $back = false)
-{
-    if (Utility::isAjax()) {
-        printSuccessJSON($message);
-    } else {
-        Page::redirect($url, $message, __('Information'), 0, false, $back);
-    }
-}
-
-/**
- * 跳转时显示错误信息。如果指定URL，则显示错误信息后，自动跳转到这个URL。
- * 否则，停留在错误信息页面，等待用户后退。
- *
- * @param string $message 跳转时，显示的信息
- * @param string $url     页面跳转地址
- * @param bool   $back    是否显示后退链接
- */
-function displayError(string $message, string $url = '', bool $back = true)
-{
-    if (Utility::isAjax()) {
-        printErrorJSON($message);
-    } else {
-        Page::redirect($url, $message, __('Error'), $url ? 2 : 0, true, $back);
-    }
-}
-
-/**
  * 页面结束处理
  *
  * @param int          $statusCode Http状态码
@@ -519,7 +455,7 @@ function byebye(?int $statusCode = null, $content = null)
     Debug::logHttpContent($content);
 
     // 只有调试模式下，非ajax调用页面输出
-    if (! Utility::isAjax() && neo()->getExplainSQL()) {
+    if (! neo()->getRequest()->isAjax() && neo()->getExplainSQL()) {
         MySQLExplain::display();
     }
 
@@ -575,6 +511,7 @@ function removeSysPath(?string $filename = null)
 
     return $filename;
 }
+
 /**
  * 打印变量
  *
@@ -586,10 +523,9 @@ function d(...$args)
         return;
     }
 
-    $addtrace = false;
-    if ($args[count($args) - 1] == '__add_trace__') {
-        $addtrace = true;
-        array_pop($args);
+    $addtrace = null;
+    if ($args[0] == '__add_trace__') {
+        $addtrace = array_shift($args);
     }
 
     $lines = [];
@@ -602,10 +538,16 @@ function d(...$args)
 
     $errors = 'Time: ' . formatLongDate() . $hr;
     foreach ($args as $arg) {
-        $errors .= print_r($arg, true) . PHP_EOL;
+        $errors .= '|==> ' . print_r($arg, true) . PHP_EOL;
     }
 
-    if (Utility::isCli() || Utility::isAjax()) {
+    if (neo()->getRequest()->isAjax()) {
+        printOutJSON([
+            'code' => 1,
+            'msg' => $errors,
+            'data' => $lines,
+        ]);
+    } elseif (Utility::isCli()) {
         echo $errors, $hr, implode(PHP_EOL, $lines);
     } else {
         static $class = null;
@@ -630,9 +572,7 @@ function d(...$args)
  */
 function x(...$args)
 {
-    $args[] = '__add_trace__';
+    d('__add_trace__', ...$args);
 
-    d(...$args);
-
-    unload();
+    exit();
 }

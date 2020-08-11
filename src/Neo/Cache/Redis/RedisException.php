@@ -1,6 +1,8 @@
 <?php
 
-namespace Neo\Exception;
+namespace Neo\Cache\Redis;
+
+use Neo\Exception\NeoException;
 
 /**
  * Redis异常

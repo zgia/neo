@@ -5,7 +5,7 @@ namespace Neo\Database;
 /**
  * Class to interface with a database
  */
-interface Database
+interface DatabaseInterface
 {
     /**
      * 连接到一个数据库

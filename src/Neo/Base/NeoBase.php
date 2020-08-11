@@ -2,7 +2,7 @@
 
 namespace Neo\Base;
 
-use Neo\NeoFrame;
+use Neo\Neo;
 
 /**
  * Class NeoBase
@@ -10,7 +10,7 @@ use Neo\NeoFrame;
 class NeoBase
 {
     /**
-     * @var NeoFrame
+     * @var Neo
      */
     protected $neo;
 

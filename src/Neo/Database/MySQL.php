@@ -10,12 +10,11 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\FetchMode;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
-use Neo\Exception\DatabaseException;
 
 /**
  * Class to interface with a database
  */
-class MySQL extends NeoDatabase implements Database
+class MySQL extends AbstractDatabase implements DatabaseInterface
 {
     /**
      * 数据库连接
@@ -51,7 +50,7 @@ class MySQL extends NeoDatabase implements Database
     protected $qb;
 
     /**
-     * NeoDatabase destructor
+     * MySQL destructor
      */
     public function __destruct()
     {
@@ -125,7 +124,7 @@ class MySQL extends NeoDatabase implements Database
 
         $action = $replace ? 'REPLACE' : 'INSERT';
 
-        $sql = "{$action} INTO " . $this->tableName($table) . ' SET ' . $this->assign($data);
+        $sql = "{$action} INTO " . $this->tableName($table) . ' SET ' . $this->assignmentList($data);
 
         return $this->write($sql);
     }
@@ -143,7 +142,7 @@ class MySQL extends NeoDatabase implements Database
     {
         $this->clearBinds();
 
-        $sql = 'UPDATE ' . $this->tableName($table) . ' SET ' . $this->assign($data) . $this->where($conditions);
+        $sql = 'UPDATE ' . $this->tableName($table) . ' SET ' . $this->assignmentList($data) . $this->where($conditions);
 
         return $this->write($sql);
     }
@@ -383,7 +382,7 @@ class MySQL extends NeoDatabase implements Database
      *
      * @return int
      */
-    public function insertId()
+    public function lastInsertId()
     {
         return $this->connection->lastInsertId();
     }
@@ -624,8 +623,7 @@ class MySQL extends NeoDatabase implements Database
      */
     public function getSQLLogger()
     {
-        return $this->connection->getConfiguration()
-            ->getSQLLogger();
+        return $this->connection->getConfiguration()->getSQLLogger();
     }
 
     /**

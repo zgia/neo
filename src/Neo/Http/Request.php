@@ -2,6 +2,7 @@
 
 namespace Neo\Http;
 
+use Neo\Exception\ParamException;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
 /*
@@ -40,53 +41,119 @@ define('INPUT_TYPE_BINARY', 12);
 class Request extends SymfonyRequest
 {
     /**
+     * 是否异步请求
+     *
+     * @var bool
+     */
+    private $ajax = false;
+
+    /**
      * 请求参数
      *
      * @var array
      */
     private $params = [];
 
-    /**
-     * 读取Request请求参数
-     *
-     * @return array
-     */
     public function getParams()
     {
         return $this->params;
     }
 
     /**
-     * 设置Request请求参数
+     * 设置参数
      *
      * @param array $params
-     * 
-     * @return array
      */
     public function setParams(array $params)
     {
-        $this->params = array_merge($this->params, $params);
+        $this->params = $params;
+    }
+
+    public function mergeParams(array $params)
+    {
+        if ($params) {
+            $this->params = array_merge($this->params, $params);
+        }
 
         return $this->params;
     }
 
     /**
-     * Makes data in an array safe to use
+     * 设置请求方式
      *
-     * @param array $source    The source array containing the data to be cleaned
-     * @param array $variables Array of variable names and types we want to extract from the source array
-     *
-     * @return array
+     * @param bool $ajax
      */
-    public static function cleanArray($source, $variables)
+    public function setAjax(bool $ajax)
     {
-        $return = [];
+        $this->ajax = $ajax;
+    }
 
-        foreach ($variables as $varname => $vartype) {
-            $return[$varname] = static::clean($source[$varname], $vartype, isset($source[$varname]));
+    /**
+     * 是否异步请求
+     *
+     * @return bool
+     */
+    public function isAjax()
+    {
+        return $this->ajax || $this->_server('neo_ajax');
+    }
+
+    /**
+     * @param array                $query      The GET parameters
+     * @param array                $request    The POST parameters
+     * @param array                $attributes The request attributes (parameters parsed from the PATH_INFO, ...)
+     * @param array                $cookies    The COOKIE parameters
+     * @param array                $files      The FILES parameters
+     * @param array                $server     The SERVER parameters
+     * @param null|resource|string $content    The raw body data
+     *
+     * @return static
+     */
+    public static function init(array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    {
+        return new static($query, $request, $attributes, $cookies, $files, $server, $content);
+    }
+
+    /**
+     * Create Request
+     *
+     * @param  string         $type
+     * @param  array          $data
+     * @return SymfonyRequest
+     */
+    public static function createRequest(string $type = 'fpm', ?array $data = null)
+    {
+        parent::setFactory(['Neo\Http\Request', 'init']);
+
+        /**
+         * @var Request $request
+         */
+        $request = null;
+
+        if ($type === 'fpm') {
+            $request = static::createFromGlobals();
+        } else {
+            if (! is_array($data)) {
+                throw new ParamException(__('Invalid param $data, it must be an array.'));
+            }
+
+            $uri = (string) $data['uri'];
+            $method = (string) $data['method'];
+            $parameters = (array) $data['parameters'];
+            $cookies = (array) $data['cookies'];
+            $files = (array) $data['files'];
+            $server = (array) $data['server'];
+            $content = $data['content'];
+
+            $request = static::create($uri, $method, $parameters, $cookies, $files, $server, $content);
         }
 
-        return $return;
+        $_req = $request->_request(null, true);
+
+        $request->setParams($_req);
+        $request->setAjax((bool) ($_req['ajax'] ?? ($_req['AJAX'] ?? false)));
+
+        return $request;
     }
 
     /**
@@ -107,28 +174,38 @@ class Request extends SymfonyRequest
             'f' => 'files',
         ];
 
-        if ($gpc === 'r') {
-            $requestOrder = ini_get('request_order') ?: ini_get('variables_order');
-            $requestOrder = preg_replace('#[^cgp]#', '', strtolower($requestOrder)) ?: 'gp';
-
-            $data = [];
-
-            foreach (str_split($requestOrder) as $order) {
-                $prop = $superglobal[$order];
-                $data = array_merge($data, $this->{$prop}->all());
-            }
-        } else {
-            $prop = $superglobal[$gpc];
-            $data = $this->{$prop}->all();
+        switch ($gpc) {
+            case 'r':
+                $source = $this->_request();
+                break;
+            case 's':
+                $source = $this->_server();
+                break;
+            default:
+                $source = $this->{$superglobal[$gpc]}->all();
+                break;
         }
 
-        $input = [];
+        return static::cleanArray($source, $variables);
+    }
+
+    /**
+     * Makes data in an array safe to use
+     *
+     * @param array $source    The source array containing the data to be cleaned
+     * @param array $variables Array of variable names and types we want to extract from the source array
+     *
+     * @return array
+     */
+    public static function cleanArray($source, $variables)
+    {
+        $return = [];
 
         foreach ($variables as $varname => $vartype) {
-            $input[$varname] = static::clean($data[$varname], $vartype, isset($data[$varname]));
+            $return[$varname] = static::clean($source[$varname], $vartype, isset($source[$varname]));
         }
 
-        return $input;
+        return $return;
     }
 
     /**
@@ -189,13 +266,13 @@ class Request extends SymfonyRequest
                 $data = intval($data);
                 break;
             case INPUT_TYPE_UINT:
-                $data = ($data = intval($data)) < 0 ? 0 : $data;
+                $data = max(0, intval($data));
                 break;
             case INPUT_TYPE_NUM:
-                $data = strval($data) + 0;
+                $data = $data + 0;
                 break;
             case INPUT_TYPE_UNUM:
-                $data = (($data = strval($data) + 0) < 0) ? 0 : $data;
+                $data = max(0, $data + 0);
                 break;
             case INPUT_TYPE_BINARY:
             case INPUT_TYPE_NOTRIM:
@@ -208,43 +285,25 @@ class Request extends SymfonyRequest
                 $data = htmlentities(trim(strval($data)), ENT_QUOTES);
                 break;
             case INPUT_TYPE_BOOL:
-                $data = in_array(strtolower($data), $booltypes) ? 1 : 0;
+                $data = in_array(strtolower($data), $booltypes);
                 break;
             case INPUT_TYPE_ARRAY:
-                $data = (is_array($data)) ? $data : [];
+                if (! is_array($data)) {
+                    $data = [];
+                }
                 break;
             case INPUT_TYPE_FILE:
-
-                // perhaps redundant :p
-                if (is_array($data)) {
-                    if (is_array($data['name'])) {
-                        $files = count($data['name']);
-                        for ($index = 0; $index < $files; ++$index) {
-                            $data['name']["{$index}"] = trim(strval($data['name']["{$index}"]));
-                            $data['type']["{$index}"] = trim(strval($data['type']["{$index}"]));
-                            $data['tmp_name']["{$index}"] = trim(strval($data['tmp_name']["{$index}"]));
-                            $data['error']["{$index}"] = intval($data['error']["{$index}"]);
-                            $data['size']["{$index}"] = intval($data['size']["{$index}"]);
-                        }
-                    } else {
-                        $data['name'] = trim(strval($data['name']));
-                        $data['type'] = trim(strval($data['type']));
-                        $data['tmp_name'] = trim(strval($data['tmp_name']));
-                        $data['error'] = intval($data['error']);
-                        $data['size'] = intval($data['size']);
-                    }
-                } else {
+                if (! is_array($data)) {
                     $data = [
                         'name' => '',
                         'type' => '',
                         'tmp_name' => '',
-                        'error' => 0,
-                        'size' => 4, // UPLOAD_ERR_NO_FILE
+                        'error' => UPLOAD_ERR_NO_FILE,
+                        'size' => 0,
                     ];
                 }
                 break;
             case INPUT_TYPE_UNIXTIME:
-
                 if (is_array($data)) {
                     $data = array_map('intval', $data);
                     if ($data['month'] && $data['day'] && $data['year']) {
@@ -277,17 +336,29 @@ class Request extends SymfonyRequest
     }
 
     /**
-     * fetch url of current page without the query string
-     * 
-     * @return string The url of current page
+     * 移除 URI 中的 Query String
+     *
+     * @param string $uri
+     *
+     * @return string URI
+     */
+    public static function stripQueryString(string $uri)
+    {
+        if (false !== $pos = strpos($uri, '?')) {
+            $uri = substr($uri, 0, $pos);
+        }
+
+        return $uri;
+    }
+
+    /**
+     * 获取当前页不带 Query String 的 URI
+     *
+     * @return string URI
      */
     public function script()
     {
-        $script_path = $this->getRequestUri();;
-
-        $quest_pos = strpos($script_path, '?');
-
-        return $quest_pos !== false ? substr($script_path, 0, $quest_pos) : $script_path;
+        return static::stripQueryString($this->getRequestUri());
     }
 
     /**
@@ -320,5 +391,154 @@ class Request extends SymfonyRequest
     public function userAgent()
     {
         return $this->headers->get('user-agent');
+    }
+
+    /**
+     * 获取伪 $_POST 中的数据
+     *
+     * @param string $key
+     *
+     * @return null|array|string
+     */
+    public function _post(?string $key = null)
+    {
+        if ($key) {
+            return $this->request->get($key);
+        }
+
+        return $this->request->all();
+    }
+
+    /**
+     * 获取伪 $_GET 中的数据
+     *
+     * @param string $key
+     *
+     * @return null|array|string
+     */
+    public function _get(?string $key = null)
+    {
+        if ($key) {
+            return $this->query->get($key);
+        }
+
+        return $this->query->all();
+    }
+
+    /**
+     * 获取伪 $_FILES 中的数据
+     *
+     * @param string $key
+     *
+     * @return null|array|string
+     */
+    public function _file(?string $key = null)
+    {
+        if ($key) {
+            return $this->files->get($key);
+        }
+
+        return $this->files->all();
+    }
+
+    /**
+     * 获取伪 $_COOKIES 中的数据
+     *
+     * @param string $key
+     *
+     * @return null|array|string
+     */
+    public function _cookie(?string $key = null)
+    {
+        if ($key) {
+            return $this->cookies->get($key);
+        }
+
+        return $this->cookies->all();
+    }
+
+    /**
+     * 获取 Header 中的数据
+     *
+     * @param string $key
+     *
+     * @return null|array|string
+     */
+    public function _header(?string $key = null)
+    {
+        if ($key) {
+            return $this->headers->get($key);
+        }
+
+        return $this->headers->all();
+    }
+
+    /**
+     * 获取伪 $_SERVER 中的数据
+     *
+     * @param string $key
+     *
+     * @return array
+     */
+    public function _server(?string $key = null)
+    {
+        static $_svr = null;
+
+        if ($_svr === null) {
+            $this->server->set('QUERY_STRING', static::normalizeQueryString(http_build_query($this->query->all(), '', '&')));
+
+            $tmp = $this->server->all();
+
+            foreach ($this->headers->all() as $k => $v) {
+                $k = strtoupper(str_replace('-', '_', $k));
+                if (\in_array($k, ['CONTENT_TYPE', 'CONTENT_LENGTH', 'CONTENT_MD5'], true)) {
+                    $tmp[$k] = implode(', ', $v);
+                } else {
+                    $tmp['HTTP_' . $k] = implode(', ', $v);
+                }
+            }
+
+            $_svr = $tmp;
+        }
+
+        if ($key) {
+            return $_svr[$key] ?? null;
+        }
+
+        return $_svr;
+    }
+
+    /**
+     * 获取伪 $_REQUEST 中的数据
+     *
+     * @param string $key
+     * @param bool   $reload
+     *
+     * @return null|array|string
+     */
+    public function _request(?string $key = null, bool $reload = false)
+    {
+        static $_req = null;
+
+        if ($_req === null || $reload) {
+            $request = ['g' => $this->query->all(), 'p' => $this->request->all(), 'c' => $this->cookies->all()];
+
+            $requestOrder = ini_get('request_order') ?: ini_get('variables_order');
+            $requestOrder = preg_replace('#[^cgp]#', '', strtolower($requestOrder)) ?: 'gp';
+
+            $tmp = [[]];
+
+            foreach (str_split($requestOrder) as $order) {
+                $tmp[] = $request[$order];
+            }
+
+            $_req = array_merge(...$tmp);
+        }
+
+        if ($key) {
+            return $_req[$key] ?? null;
+        }
+
+        return $_req;
     }
 }

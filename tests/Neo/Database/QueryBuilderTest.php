@@ -2,7 +2,7 @@
 
 use Neo\Database\MySQLi;
 use Neo\Database\Query\QueryBuilder;
-use Neo\NeoFrame;
+use Neo\Neo;
 
 /**
  * @backupGlobals disabled

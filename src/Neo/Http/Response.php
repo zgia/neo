@@ -21,6 +21,9 @@ class Response extends SymfonyResponse
     {
         $code || $code = 200;
 
+        // 不暴露：php/
+        header_remove('x-powered-by');
+
         return $this->prepare(neo()->getRequest())
             ->setStatusCode($code)
             ->setContent($content)

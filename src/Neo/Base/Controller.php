@@ -36,7 +36,7 @@ class Controller extends NeoBase
     /**
      * 预先处理
      */
-    protected function beforeRender()
+    public function beforeRender()
     {
     }
 
@@ -51,6 +51,6 @@ class Controller extends NeoBase
     {
         $content = $this->request->getContent();
 
-        return  $raw ? $content : json_decode($content, true, 512, JSON_BIGINT_AS_STRING);
+        return  $raw ? $content : jsonDecode($content);
     }
 }

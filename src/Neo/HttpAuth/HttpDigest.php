@@ -2,7 +2,7 @@
 
 namespace Neo\HttpAuth;
 
-use Neo\Exception\NeoException;
+use Neo\Exception\LogicException;
 
 /**
  * HTTP DIGEST 验证
@@ -22,10 +22,8 @@ class HttpDigest extends Auth implements AuthInterface
     {
         parent::__construct($config);
 
-        if ($config['HTTP_DIGEST']) {
-            if ($config['HTTP_DIGEST']['users']) {
-                $this->validUsers = $config['HTTP_DIGEST']['users'];
-            }
+        if (isset($config['http_digest']['users'])) {
+            $this->validUsers = $config['http_digest']['users'];
         }
     }
 
@@ -45,7 +43,7 @@ class HttpDigest extends Auth implements AuthInterface
 
         try {
             $authed = $this->auth();
-        } catch (\Exception $ex) {
+        } catch (LogicException $ex) {
             $this->_forceLogin($ex->getMessage(), $ex->getCode());
         }
 
@@ -55,23 +53,25 @@ class HttpDigest extends Auth implements AuthInterface
     /**
      * 验证
      *
-     * @throws \Exception
+     * @throws LogicException
      * @return bool
      */
     protected function auth()
     {
         $uniqid = uniqid('');
 
-        if ($_SERVER['PHP_AUTH_DIGEST']) {
-            $digestString = $_SERVER['PHP_AUTH_DIGEST'];
-        } elseif ($_SERVER['HTTP_AUTHORIZATION']) {
-            $digestString = $_SERVER['HTTP_AUTHORIZATION'];
+        $server = neo()->getRequest()->_server();
+
+        if ($server['PHP_AUTH_DIGEST']) {
+            $digestString = $server['PHP_AUTH_DIGEST'];
+        } elseif ($server['HTTP_AUTHORIZATION']) {
+            $digestString = $server['HTTP_AUTHORIZATION'];
         } else {
             $digestString = '';
         }
 
         if (empty($digestString)) {
-            throw new NeoException(__f('%s: digest empty.', $uniqid));
+            throw new LogicException(__f('%s: digest empty.', $uniqid));
         }
 
         // 取出验证信息
@@ -87,14 +87,14 @@ class HttpDigest extends Auth implements AuthInterface
         // Digest 验证需要返回: md5(username:restrealm:password)
         $A1 = md5($digest['username'] . ':' . static::REST_REALM . ':' . (isset($this->validUsers[$digest['username']]) ? $this->validUsers[$digest['username']] : ''));
         if (! array_key_exists('username', $digest) || ! $A1) {
-            throw new NeoException(__f('%s: digest error.', $uniqid));
+            throw new LogicException(__f('%s: digest error.', $uniqid));
         }
 
-        $A2 = md5(strtoupper($_SERVER['REQUEST_METHOD']) . ':' . $digest['uri']);
+        $A2 = md5(strtoupper($server['REQUEST_METHOD']) . ':' . $digest['uri']);
         $A3 = md5($A1 . ':' . $digest['nonce'] . ':' . $digest['nc'] . ':' . $digest['cnonce'] . ':' . $digest['qop'] . ':' . $A2);
 
         if ($digest['response'] != $A3) {
-            throw new NeoException(__('A3 authenticate failed.'));
+            throw new LogicException(__('A3 authenticate failed.'));
         }
 
         return true;

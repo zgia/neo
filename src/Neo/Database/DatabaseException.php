@@ -1,6 +1,8 @@
 <?php
 
-namespace Neo\Exception;
+namespace Neo\Database;
+
+use Neo\Exception\NeoException;
 
 /**
  * 数据库异常

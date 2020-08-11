@@ -23,7 +23,7 @@ class File implements CacheInterface
      * @param string $key
      * @param mixed  $val
      */
-    public function set($key, $val)
+    public function set(string $key, $val)
     {
         static::write($key, $val);
     }
@@ -35,7 +35,7 @@ class File implements CacheInterface
      *
      * @return array
      */
-    public function get($key)
+    public function get(string $key)
     {
         return self::read($key);
     }
@@ -124,7 +124,7 @@ class File implements CacheInterface
      *
      * @return array
      */
-    public static function read($key)
+    public static function read(string $key)
     {
         $file = static::getFilePath($key);
 

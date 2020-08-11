@@ -5,7 +5,7 @@ namespace Neo\Traiter;
 use GuzzleHttp\Client as GuzzleHttpClient;
 use GuzzleHttp\Exception\RequestException;
 use Neo\Debug;
-use Neo\Exception\NeoException;
+use Neo\Exception\LogicException;
 use Neo\NeoLog;
 use Psr\Http\Message\ResponseInterface;
 
@@ -86,7 +86,7 @@ trait GuzzleHttpClientTraiter
      * @param array  $params
      * @param bool   $origin 返回数据是否需要json_decode
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return null|mixed
      */
     public function post($url, array $params = [], $origin = false)
@@ -101,7 +101,7 @@ trait GuzzleHttpClientTraiter
      * @param array  $query
      * @param bool   $origin 返回数据是否需要json_decode
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return null|mixed
      */
     public function get($url, array $query = [], $origin = false)
@@ -118,7 +118,7 @@ trait GuzzleHttpClientTraiter
      * @param bool              $origin  返回数据是否需要json_decode
      * @param ResponseInterface $result  Response对象
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return null|array|string
      */
     public function httpClient($verb, $url, array $options = [], $origin = false, &$result = null)
@@ -147,7 +147,7 @@ trait GuzzleHttpClientTraiter
      *
      * @param RequestException $ex
      *
-     * @return NeoException
+     * @return LogicException
      */
     protected function log($ex)
     {
@@ -171,6 +171,6 @@ trait GuzzleHttpClientTraiter
 
         NeoLog::error('guzzle', __FUNCTION__, $data);
 
-        return new NeoException($msg, $code, $ex);
+        return new LogicException($msg, $code, $ex);
     }
 }

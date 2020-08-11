@@ -47,12 +47,15 @@ class Cookie
     /**
      * 获取COOKIE
      *
-     * @param string $name Cookie name
+     * @param string  $name    Cookie name
+     * @param Request $request
      *
      * @return string
      */
-    public static function get(string $name)
+    public static function get(string $name, ?Request $request = null)
     {
-        return neo()->getRequest()->cookies->get($name);
+        $request || $request = neo()->getRequest();
+
+        return $request->cookies->get($name);
     }
 }

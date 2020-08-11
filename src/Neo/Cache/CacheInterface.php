@@ -20,7 +20,7 @@ interface CacheInterface
      * @param string $key
      * @param mixed  $val
      */
-    public function set($key, $val);
+    public function set(string $key, $val);
 
     /**
      * 读
@@ -29,5 +29,5 @@ interface CacheInterface
      *
      * @return mixed
      */
-    public function get($key);
+    public function get(string $key);
 }

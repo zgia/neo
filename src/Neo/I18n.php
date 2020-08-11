@@ -26,7 +26,7 @@ class I18n
             return;
         }
 
-        $locale || $locale = NeoFrame::language();
+        $locale || $locale = Neo::language();
 
         static::loadLanguage("{$languages_dir}/{$locale}.php");
     }

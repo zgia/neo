@@ -2,7 +2,7 @@
 
 namespace Neo\HttpAuth;
 
-use Neo\Exception\NeoException;
+use Neo\Exception\LogicException;
 use Neo\NeoLog;
 
 /**
@@ -39,7 +39,7 @@ class HttpWsse extends Auth implements AuthInterface
                 $userToken['nonce'],
                 $userToken['created']
             );
-        } catch (\Exception $ex) {
+        } catch (LogicException $ex) {
             NeoLog::error('auth', 'httpwsse', $ex);
         }
 
@@ -49,7 +49,7 @@ class HttpWsse extends Auth implements AuthInterface
     /**
      * 验证
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return bool
      */
     protected function auth()
@@ -59,13 +59,13 @@ class HttpWsse extends Auth implements AuthInterface
         $clientTime = strtotime($created);
         $serverTime = time() + 60;
         if ($clientTime > $serverTime || ($serverTime - $clientTime > 300)) {
-            throw new NeoException(__('Time error.'));
+            throw new LogicException(__('Time error.'));
         }
 
         $expected = base64_encode(sha1(base64_decode($nonce) . $created . $secret, true));
 
         if ($digest != $expected) {
-            throw new NeoException(__('Authenticate failed.'));
+            throw new LogicException(__('Authenticate failed.'));
         }
 
         return true;

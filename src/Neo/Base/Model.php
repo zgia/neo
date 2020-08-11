@@ -2,6 +2,10 @@
 
 namespace Neo\Base;
 
+use Neo\Database\AbstractDatabase;
+use Neo\Database\DatabaseInterface;
+use Neo\Database\MySQL;
+
 /**
  * 模型基类
  */
@@ -62,11 +66,21 @@ class Model extends NeoBase
     }
 
     /**
+     * DB 实例
+     *
+     * @return AbstractDatabase|DatabaseInterface|MySQL
+     */
+    public function db()
+    {
+        return $this->neo->getDB();
+    }
+
+    /**
      * 在主数据库上开启事务
      */
     public function beginTransaction()
     {
-        $this->neo->getDB()->beginTransaction();
+        $this->db()->beginTransaction();
     }
 
     /**
@@ -74,7 +88,7 @@ class Model extends NeoBase
      */
     public function commit()
     {
-        $this->neo->getDB()->commit();
+        $this->db()->commit();
     }
 
     /**
@@ -82,7 +96,7 @@ class Model extends NeoBase
      */
     public function rollBack()
     {
-        $this->neo->getDB()->rollBack();
+        $this->db()->rollBack();
     }
 
     /**
@@ -145,14 +159,20 @@ class Model extends NeoBase
      */
     public function selectSQL(array $conditions = [], array $more = [], array $ret = [])
     {
+        // 可以直接传入SQL
         if (! empty($conditions['sql'])) {
             return $conditions['sql'];
         }
 
-        $ret['k'] || $ret['k'] = $this->tableid;
-        $more['from'] || $more['from'] = "{$this->table} AS {$this->table}";
+        if (empty($ret['k'])) {
+            $ret['k'] = $this->tableid;
+        }
 
-        return $this->neo->getDB()->selectSQL($conditions, $more, $ret);
+        if (empty($more['from'])) {
+            $more['from'] = "{$this->table} AS {$this->table}";
+        }
+
+        return $this->db()->selectSQL($conditions, $more, $ret);
     }
 
     /**
@@ -169,12 +189,12 @@ class Model extends NeoBase
         $sql = $this->selectSQL($conditions, $more, $ret);
 
         // k存在，且不为空，则返回kv数组，key为$ret['k']
-        // k存在，且为null，则返回无k数组
+        // k存在，且为null或者为假，则返回无k数组
         // k不存在，则返回kv数组，key为tableid
-        $key = $ret['k'] ?: (array_key_exists('k', $ret) ? null : $this->tableid);
-        $element = $ret['e'] ?: null;
+        $key = (! isset($ret['k'])) ? $this->tableid : ($ret['k'] ?: null);
+        $element = empty($ret['e']) ? null : $ret['e'];
 
-        return $this->neo->getDB()->fetchArray($sql, $element, $key);
+        return $this->db()->fetchArray($sql, $element, $key);
     }
 
     /**
@@ -184,27 +204,26 @@ class Model extends NeoBase
      * @param array        $more        字句
      * @param array|string $returnField 指定返回的数组元素
      *
-     * @return null|array|object
+     * @return null|array|mixed
      */
     public function row(array $conditions = [], array $more = [], $returnField = null)
     {
-        if (! $more || ! $more['field']) {
+        if (! $more || empty($more['field'])) {
             $field = is_array($returnField) ? implode(',', $returnField) : $returnField;
-            $field = $field ?: '*';
-            $more['field'] = $field;
+            $more['field'] = $field ?: '*';
         }
 
         $more['limit'] = 1;
 
         $sql = $this->selectSQL($conditions, $more);
 
-        $row = $this->neo->getDB()->fetchRow($sql);
+        $row = $this->db()->fetchRow($sql);
 
-        if (is_string($returnField) && $returnField) {
-            return $row ? $row[$returnField] : null;
+        if ($returnField && is_string($returnField)) {
+            return $row[$returnField] ?? null;
         }
 
-        return (array) $row;
+        return $row ? $row : null;
     }
 
     /**
@@ -233,7 +252,7 @@ class Model extends NeoBase
 
         $sql = $this->selectSQL($conditions, $more);
 
-        return $this->neo->getDB()->fetchOne($sql);
+        return $this->db()->fetchOne($sql);
     }
 
     /**
@@ -302,6 +321,18 @@ class Model extends NeoBase
     }
 
     /**
+     * 在主数据库上执行的"写"操作，比如：insert，update，delete等等
+     *
+     * @param string $sql The text of the SQL query to be executed
+     *
+     * @return int
+     */
+    public function write(string $sql)
+    {
+        return $this->db()->write($sql);
+    }
+
+    /**
      * 保存数据
      *
      * @param array $data       数据
@@ -337,9 +368,9 @@ class Model extends NeoBase
      */
     public function insert(array $data, bool $replace = false, ?string $table = null)
     {
-        $affected = $this->neo->getDB()->insert($table ?: $this->table, $data, $replace);
+        $affected = $this->db()->insert($table ?: $this->table, $data, $replace);
 
-        return $this->hasPrimaryKey ? $this->neo->getDB()->insertId() : $this->renewAffectedRows($affected);
+        return $this->hasPrimaryKey ? $this->db()->lastInsertId() : $this->renewAffectedRows($affected);
     }
 
     /**
@@ -353,7 +384,7 @@ class Model extends NeoBase
      */
     public function update(array $data, array $conditions = [], ?string $table = null)
     {
-        $affected = $this->neo->getDB()->update($table ?: $this->table, $data, $conditions);
+        $affected = $this->db()->update($table ?: $this->table, $data, $conditions);
 
         return $this->renewAffectedRows($affected);
     }
@@ -379,7 +410,7 @@ class Model extends NeoBase
 
             $affected = $this->update([$this->deletedFlag => $val], $conditions);
         } else {
-            $affected = $this->neo->getDB()->delete($this->table, $conditions);
+            $affected = $this->db()->delete($this->table, $conditions);
         }
 
         return $this->renewAffectedRows($affected);
@@ -427,7 +458,7 @@ class Model extends NeoBase
      */
     public function getErrno()
     {
-        return $this->neo->getDB()->getErrno();
+        return $this->db()->getErrno();
     }
 
     /**
@@ -437,6 +468,6 @@ class Model extends NeoBase
      */
     public function getError()
     {
-        return $this->neo->getDB()->getError();
+        return $this->db()->getError();
     }
 }

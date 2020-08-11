@@ -2,7 +2,7 @@
 
 namespace Neo\Database;
 
-use Neo\NeoFrame;
+use Neo\Neo;
 use Neo\Str;
 use NilPortugues\Sql\QueryFormatter\Formatter;
 
@@ -13,12 +13,15 @@ use NilPortugues\Sql\QueryFormatter\Formatter;
  */
 class MySQLExplain extends MySQL
 {
-    public $message = '';
-
+    // Explain 内容
     public $message_title = '';
 
+    public $message = '';
+
+    // 内存使用
     public $memory_before = 0;
 
+    // 耗时
     public $time_start = 0;
 
     public $time_before = 0;
@@ -36,7 +39,7 @@ class MySQLExplain extends MySQL
 
         echo sprintf(
             '<h3>System loaded to here: %s ms</h3>',
-            self::formatTime($this->time_start - Neo()->getTimeStart())
+            self::formatTime($this->time_start - neo()->getTimeStart())
         );
     }
 
@@ -45,7 +48,11 @@ class MySQLExplain extends MySQL
      */
     public function getConnection(array $config)
     {
-        $this->timerStart("Connect to Database <em>{$config['database']}</em> on Server <em>{$config['host']}</em>");
+        $this->timerStart(sprintf(
+            'Connect to Database <em>%s</em> on Master server <em>%s</em>',
+            $config['master']['dbname'],
+            $config['master']['host']
+        ));
         $return = parent::getConnection($config);
         $this->timerStop();
 
@@ -102,10 +109,10 @@ class MySQLExplain extends MySQL
     private function header()
     {
         echo '<!DOCTYPE html>
-			<html lang="' . NeoFrame::language() . '">
+			<html lang="' . Neo::language() . '">
 			<head>
-				<meta charset="' . NeoFrame::charset() . '">
-				<title>NeoFrame</title>
+				<meta charset="' . Neo::charset() . '">
+				<title>Neo</title>
 				<style type="text/css">
                     body { color: black; background-color: #FFF; }
                     body, p, td, th { font-family: verdana, sans-serif; font-size: 10pt; text-align: left; }
@@ -235,7 +242,7 @@ class MySQLExplain extends MySQL
 					</div>
 					</body></html>';
 
-        $explain = sprintf(
+        echo sprintf(
             $explain,
             $totaltime,
             db(false)->getQueryCount(),
@@ -246,7 +253,5 @@ class MySQLExplain extends MySQL
                 preg_replace('#^(.*)$#si', '<li>\1</li>', array_map('removeSysPath', $get_included_files))
             )
         );
-
-        echo $explain;
     }
 }

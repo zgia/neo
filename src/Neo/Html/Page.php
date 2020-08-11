@@ -2,6 +2,7 @@
 
 namespace Neo\Html;
 
+use Neo\Config;
 use Neo\Http\Cookie;
 use Neo\Str;
 use Neo\Utility;
@@ -149,17 +150,15 @@ class Page
             }
 
             byebye($statusCode, static::colorConsoleText($msg . PHP_EOL, 'green', 'red'));
+        } elseif (neo()->getRequest()->isAjax()) {
+            printOutJSON(['code' => 1, 'msg' => $message, 'data' => $more], $statusCode);
+        } else {
+            static::displaySimpleErrorPage(
+                nl2br($message),
+                (string) $title,
+                ['more' => $more, 'isError' => true, 'statusCode' => $statusCode]
+            );
         }
-
-        if (Utility::isAjax()) {
-            printErrorJSON($message);
-        }
-
-        static::displaySimpleErrorPage(
-            nl2br($message),
-            (string) $title,
-            ['more' => $more, 'isError' => true, 'statusCode' => $statusCode]
-        );
     }
 
     /**
@@ -174,17 +173,15 @@ class Page
         $statusCode = is_array($extension) ? $extension['statusCode'] : null;
 
         // 自定义一个错误页面
-        if (defined('NEO_REDIRECT_PAGE') && NEO_REDIRECT_PAGE) {
-            $page = NEO_REDIRECT_PAGE;
-        } else {
-            $page = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'error_page.php';
-        }
+        $page = Config::get('server', 'redirect_page') ?: dirname(__FILE__) . DIRECTORY_SEPARATOR . 'error_page.php';
 
         if (file_exists($page)) {
             getUserDefinedVars(get_defined_vars());
-            neo()->getTemplate()->loadTemplateFile($page);
 
-            $message = null;
+            ob_start();
+            neo()->getTemplate()->loadTemplateFile($page);
+            $message = ob_get_contents();
+            ob_end_clean();
         }
 
         byebye($statusCode, $message);

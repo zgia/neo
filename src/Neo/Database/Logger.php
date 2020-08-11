@@ -35,7 +35,7 @@ class Logger extends DebugStack
     public function startQuery($sql, ?array $params = null, ?array $types = null)
     {
         if (count($this->queries) > 1000) {
-            // todo
+            // todo anything?
         }
 
         parent::startQuery($sql, $params, $types);

@@ -1,10 +1,9 @@
 <?php
 
-namespace Neo\Pay\WeChat;
+namespace Neo\Pay;
 
 use GuzzleHttp\Client as GuzzleHttpClient;
-use Neo\Exception\NeoException;
-use Neo\Exception\WeChatException;
+use Neo\Exception\LogicException;
 use Neo\NeoLog;
 use Neo\Traiter\GuzzleHttpClientTraiter;
 
@@ -57,36 +56,6 @@ abstract class AbstractPay
      * HTTP 连接超时错误码
      */
     const ERR_CODE_TIMEOUT = 28;
-
-    /**
-     * 微信返回SYSTEMERROR，BIZERR_NEED_RETRY
-     * SYSTEMERROR： 接口返回错误，系统超时等，请不要更换商户退款单号，请使用相同参数再次调用API。
-     * BIZERR_NEED_RETRY：退款业务流程错误，需要商户触发重试来解决，并发情况下，业务被拒绝，商户重试即可解决，请不要更换商户退款单号，请使用相同参数再次调用API。
-     */
-    const ERR_CODE_WEIXIN_SYSTEMERROR = 900999;
-
-    const ERR_CODE_WEIXIN_BIZERR_NEED_RETRY = 900999;
-
-    /**
-     * return_code 和 result_code 都为FAIL
-     */
-    const ERR_CODE_WEIXIN_BOTH_FAIL = 900000;
-
-    /**
-     * return_code 为 SUCCESS 和 result_code 为FAIL
-     * 但是err_code不是SYSTEMERROR或者BIZERR_NEED_RETRY
-     */
-    const ERR_CODE_WEIXIN_OTHER_FAIL = 900100;
-
-    /**
-     * 商户订单已支付，无需重复操作
-     */
-    const ERR_CODE_WEIXIN_ORDERPAID = 900200;
-
-    /**
-     * 没有数据返回
-     */
-    const ERR_CODE_WEIXIN_NO_DATA = 900500;
 
     /**
      * 设置重试次数
@@ -229,11 +198,11 @@ abstract class AbstractPay
             } elseif ($requestMethod == 'get') {
                 $form_param = http_build_query($params);
 
-                if (strpos($url, '?') == false) {
+                if (strpos($url, '?') === false) {
                     $url = $url . '?' . $form_param;
                 }
             } else {
-                throw new NeoException(__f('Method(%s) Not Allowed.', $requestMethod), 405);
+                throw new LogicException(__f('Method(%s) Not Allowed.', $requestMethod), 405);
             }
 
             NeoLog::info('pay', 'request', [$requestMethod, $url, $form_params]);
@@ -250,8 +219,8 @@ abstract class AbstractPay
             } else {
                 $response = json_decode($response, true);
             }
-        } catch (NeoException | \Exception $ex) {
-            throw new WeChatException($ex->getMessage(), $ex->getCode(), $ex);
+        } catch (\Throwable | \Exception $ex) {
+            throw new PayException($ex->getMessage(), $ex->getCode(), $ex);
         }
 
         return $response;

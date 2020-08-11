@@ -6,13 +6,12 @@ use Doctrine\DBAL\Connection as DoctrineConnection;
 use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Driver\ResultStatement;
 use Doctrine\DBAL\ParameterType;
-use Neo\Exception\DatabaseException;
 use Neo\NeoLog;
 
 /**
  * Class to interface with a database
  */
-abstract class NeoDatabase
+abstract class AbstractDatabase
 {
     /**
      * 数据库配置
@@ -89,7 +88,7 @@ abstract class NeoDatabase
      */
     public function getConfig()
     {
-        return (array) $this->config;
+        return $this->config;
     }
 
     /**
@@ -101,38 +100,17 @@ abstract class NeoDatabase
      */
     public function parseConfig(array $config)
     {
-        $config['port'] || $config['port'] = 3306;
-
         $this->setTablePrefix($config['prefix']);
+        unset($config['prefix']);
 
-        /*
-         * Master-Slave Connection
-         *
-         * $conn = DriverManager::getConnection(array(
-         *    'wrapperClass' => 'Doctrine\DBAL\Connections\MasterSlaveConnection',
-         *    'driver' => 'pdo_mysql',
-         *    'master' => array('user' => '', 'password' => '', 'host' => '', 'dbname' => ''),
-         *    'slaves' => array(
-         *        array('user' => 'slave1', 'password', 'host' => '', 'dbname' => ''),
-         *        array('user' => 'slave2', 'password', 'host' => '', 'dbname' => ''),
-         *    )
-         * ));
-         *
-         */
-        $config['master'] = array_merge($config['master'], $config['base']);
-
-        if ($config['withSlave'] && ! empty($config['slaves']) && is_array($config['slaves'])) {
+        if (! empty($config['slaves'])) {
             $slaveCount = count($config['slaves']);
             // ip不变，从库不变
             $this->slaveIndex = $slaveCount > 1 ? ord(md5(neo()->getRequest()->getClientIp())[0]) % $slaveCount : 0;
 
-            $config['slaves'] = [array_merge($config['slaves'][$this->slaveIndex], $config['base'])];
-            $config['wrapperClass'] = 'Doctrine\DBAL\Connections\MasterSlaveConnection';
-        } else {
-            unset($config['slaves']);
+            $config['slaves'] = [$config['slaves'][$this->slaveIndex]];
+            $config['wrapperClass'] = 'Neo\Database\MSConnection';
         }
-
-        unset($config['base'], $config['withSlave'], $config['prefix']);
 
         $this->config = $config;
 
@@ -562,7 +540,7 @@ abstract class NeoDatabase
      *
      * @return string
      */
-    public function assign(array $arr)
+    public function assignmentList(array $arr)
     {
         $sql = [];
 

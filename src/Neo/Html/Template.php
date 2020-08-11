@@ -2,7 +2,7 @@
 
 namespace Neo\Html;
 
-use Neo\Exception\NeoException;
+use Neo\Exception\ResourceNotFoundException;
 
 /**
  * 视图模板处理
@@ -56,14 +56,12 @@ class Template
      *
      * @param string $slug 模板文件相对路径，不带扩展名，比如：admin/user/profile
      * @param string $name 扩展属性
-     *
-     * @return string the template filename if one is located
      */
     public function getTemplateFile(string $slug, ?string $name = null)
     {
         $template = $name ? "{$slug}-{$name}" : $slug;
 
-        return $this->loadTemplateFile($this->getTemplatePath($template));
+        $this->loadTemplateFile($this->getTemplatePath($template));
     }
 
     /**
@@ -75,7 +73,7 @@ class Template
     public function loadTemplateFile(string $file, bool $require_once = false)
     {
         if (! file_exists($file) || ! is_readable($file)) {
-            throw new NeoException(sprintf('模板文件(%s)不存在或者不可读。', $file));
+            throw new ResourceNotFoundException(__f('Template file(%s) is not exist or readable.', $file));
         }
 
         // 放在Neo中的元素

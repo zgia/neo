@@ -2,7 +2,7 @@
 
 namespace Neo\Pay\WeChat;
 
-use Neo\Exception\WeChatException;
+use Neo\Pay\PayException;
 use Neo\Pay\PayInterface;
 use Neo\Str;
 
@@ -79,13 +79,13 @@ class JsApiPay extends Pay implements PayInterface
      *
      * @param string $prepayId
      *
-     * @throws WeChatException
+     * @throws PayException
      * @return array
      */
     private function _buildPrepayQueryParameters($prepayId)
     {
         if (! $prepayId) {
-            throw new WeChatException('Invalid prepayId.');
+            throw new PayException('Invalid prepayId.');
         }
 
         $data = [

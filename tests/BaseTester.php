@@ -16,6 +16,7 @@ class BaseTester extends TestCase
      * @var \Neo\Database\MySQL
      */
     public $db;
+    
     /**
      * @var \Neo\Database\Query\QueryBuilder
      */
@@ -23,7 +24,7 @@ class BaseTester extends TestCase
 
     protected function setUp(): void
     {
-        $this->db = \Neo\NeoFrame::initDatabase(MYSQL_CONFIG);
+        $this->db = \Neo\Neo::initDatabase(MYSQL_CONFIG);
 
         $this->qb = $this->db->queryBuilder();
     }

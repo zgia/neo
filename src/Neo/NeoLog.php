@@ -9,7 +9,7 @@ use Monolog\Handler\RedisHandler;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger as Monologger;
-use Neo\Exception\NeoException;
+use Neo\Exception\ResourceNotFoundException;
 
 /**
  * Class NeoLog
@@ -97,7 +97,7 @@ class NeoLog
                 static::$instance->logit(...$arguments);
             }
         } else {
-            throw new NeoException('Function (NeoLog::' . $method . ') is not exist.');
+            throw new ResourceNotFoundException('Function (NeoLog::' . $method . ') is not exist.');
         }
     }
 
@@ -112,6 +112,8 @@ class NeoLog
     private function logit(string $action, string $type, string $message, $context = null)
     {
         try {
+            $type || $type = 'neo';
+
             $logger = $this->log($type);
             if ($logger == null) {
                 return;
@@ -129,7 +131,7 @@ class NeoLog
             $context['logid'] = $this->getLogId();
 
             // 按文件分隔日志时的文件名
-            $context['type'] = $type ?: 'neo';
+            $context['type'] = $type;
 
             // 获取日志记录在文件中的位置
             if (! isset($context['traces'])) {
@@ -167,12 +169,10 @@ class NeoLog
      */
     private function log(string $type = '')
     {
-        $type || $type = 'neo';
-
         $handlers = [];
 
         // 写到文件
-        if (defined('NEO_LOG_FILE') && NEO_LOG_FILE) {
+        if (in_array('file', Config::get('logger', 'types'))) {
             $fileHandler = $this->log2File($type);
             if ($fileHandler) {
                 $handlers[] = $fileHandler;
@@ -180,7 +180,7 @@ class NeoLog
         }
 
         // 写到Redis
-        if (defined('NEO_LOG_REDIS') && NEO_LOG_REDIS) {
+        if (in_array('redis', Config::get('logger', 'types'))) {
             $redisHandler = $this->log2RedisWithLogstash();
             if ($redisHandler) {
                 $handlers[] = $redisHandler;
@@ -188,7 +188,7 @@ class NeoLog
         }
 
         // 写到php://stderr
-        if (defined('NEO_LOG_STDERR') && NEO_LOG_STDERR) {
+        if (in_array('stderr', Config::get('logger', 'types'))) {
             $streamHandler = $this->log2Stream();
             if ($streamHandler) {
                 $handlers[] = $streamHandler;
@@ -197,7 +197,7 @@ class NeoLog
 
         if ($handlers) {
             $logger = new Monologger('neolog', $handlers);
-            Monologger::setTimezone(NeoLogUtility::dateTimeZone());
+            Monologger::setTimezone(getDatetimeZone());
         } else {
             $logger = null;
         }
@@ -214,15 +214,11 @@ class NeoLog
      */
     private function log2RedisWithLogstash(string $rediskey = 'neologstash')
     {
-        if (! (defined('NEO_REDIS') && NEO_REDIS)) {
-            return null;
-        }
-
         if ($this->redisHandler) {
             return $this->redisHandler;
         }
 
-        $logRedis = NeoFrame::initRedis('logstash');
+        $logRedis = Neo::initRedis('logstash');
         if (! $logRedis || $logRedis->isDown()) {
             return null;
         }
@@ -246,17 +242,19 @@ class NeoLog
      */
     private function log2File(string $type)
     {
+        $fileCfg = Config::get('logger', 'file');
+
         // 是否只输出到一个日志文件，PERTYPE：每个type一个日志文件
-        if (! (defined('NEO_LOG_FILE_PERTYPE') && NEO_LOG_FILE_PERTYPE)) {
-            // 项目指定文件日志的文件名
-            $type = defined('NEO_LOG_FILE_TYPENAME') && NEO_LOG_FILE_TYPENAME ? NEO_LOG_FILE_TYPENAME : 'neo';
+        if (empty($fileCfg['pertype'])) {
+            // 项目指定文件日志的文件名，
+            $type = $fileCfg['typename'] ?? 'neo';
         }
 
         if ($this->fileHandler[$type]) {
             return $this->fileHandler[$type];
         }
 
-        $fmt = defined('NEO_LOG_FILE_FORMATTER') && NEO_LOG_FILE_FORMATTER ? NEO_LOG_FILE_FORMATTER : 'json';
+        $fmt = $fileCfg['formatter'] ?? 'json';
 
         $stream = new NeoLogRotatingFileHandler(
             NeoLogUtility::getFileLogDir() . '/' . $type . '.log',
@@ -290,8 +288,8 @@ class NeoLog
 
         $stream = new StreamHandler('php://' . $type, NeoLogUtility::getLogLevel());
 
-        $SIMPLE_FORMAT = '[%logtime%] %channel%.%level_name% %logid% %message% %context% %extra% %line%' . PHP_EOL;
-        $stream->setFormatter(new LineFormatter($SIMPLE_FORMAT));
+        $simple_format = '[%logtime%] %channel%.%level_name% %logid% %message% %context% %extra% %line%' . PHP_EOL;
+        $stream->setFormatter(new LineFormatter($simple_format));
 
         $this->streamHandler = $stream;
 
@@ -309,8 +307,8 @@ class NeoLog
     {
         switch ($fmt) {
             case 'line':
-                $SIMPLE_FORMAT = '[%logtime%] %channel%.%level_name% %logid% %message% %context% %extra% %line%' . PHP_EOL;
-                $formatter = new LineFormatter($SIMPLE_FORMAT);
+                $simple_format = '[%logtime%] %channel%.%level_name% %logid% %message% %context% %extra% %line%' . PHP_EOL;
+                $formatter = new LineFormatter($simple_format);
                 break;
             case 'json':
             default:
@@ -342,8 +340,8 @@ class NeoLog
             return $this->logid;
         }
 
-        if (defined('NEO_LOG_ID') && NEO_LOG_ID) {
-            $this->logid = NEO_LOG_ID;
+        if ($id = Config::get('logger', 'id')) {
+            $this->logid = $id;
         } else {
             $this->logid = sha1(uniqid(
                 '',
@@ -388,16 +386,6 @@ class NeoLogUtility
     }
 
     /**
-     * 时区
-     *
-     * @return \DateTimeZone
-     */
-    public static function dateTimeZone()
-    {
-        return new \DateTimeZone(getDatetimeZone());
-    }
-
-    /**
      * 格式化当前时间
      *
      * @param string $format
@@ -426,8 +414,8 @@ class NeoLogUtility
      */
     public static function getLogLevel()
     {
-        if (defined('NEO_LOG_LEVEL') && NEO_LOG_LEVEL) {
-            return NEO_LOG_LEVEL;
+        if ($level = Config::get('logger', 'level')) {
+            return $level;
         }
 
         // DEBUG = 100;
@@ -438,7 +426,7 @@ class NeoLogUtility
         // CRITICAL = 500;
         // ALERT = 550;
         // EMERGENCY = 600;
-        return 100;
+        return 300;
     }
 }
 

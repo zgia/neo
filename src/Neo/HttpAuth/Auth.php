@@ -2,7 +2,7 @@
 
 namespace Neo\HttpAuth;
 
-use Neo\Exception\NeoException;
+use Neo\Exception\LogicException;
 
 /**
  * Class Auth
@@ -24,7 +24,7 @@ class Auth
     /**
      * 验证
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return bool
      */
     protected function auth()

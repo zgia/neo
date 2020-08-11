@@ -3,7 +3,7 @@
 namespace Neo\Cache\Memcached;
 
 use Neo\Cache\CacheInterface;
-use Neo\Exception\NeoException;
+use Neo\Exception\LogicException;
 
 /**
  * 关于过期时间
@@ -110,7 +110,7 @@ class MemcachedStore implements CacheInterface
     {
         try {
             $this->validateConnection($this->getMemcached());
-        } catch (NeoException $ex) {
+        } catch (LogicException | \Throwable $ex) {
             return true;
         }
 
@@ -197,11 +197,11 @@ class MemcachedStore implements CacheInterface
         $status = $memcached->getVersion();
 
         if (! is_array($status)) {
-            throw new NeoException('No Memcached servers added.', 233333);
+            throw new LogicException('No Memcached servers added.', 233333);
         }
 
         if (in_array('255.255.255', $status) && count(array_unique($status)) === 1) {
-            throw new NeoException('Could not establish Memcached connection.', 233333);
+            throw new LogicException('Could not establish Memcached connection.', 233333);
         }
 
         return $memcached;
@@ -214,7 +214,7 @@ class MemcachedStore implements CacheInterface
      *
      * @return mixed
      */
-    public function get($key)
+    public function get(string $key)
     {
         $value = $this->getMemcached()
             ->get($this->prefix . $key);
@@ -264,7 +264,7 @@ class MemcachedStore implements CacheInterface
      * @param mixed  $val
      * @param int    $expired
      */
-    public function set($key, $val, $expired = 0)
+    public function set(string $key, $val, $expired = 0)
     {
         $this->delete($key);
         $this->add($key, $val, $expired);
@@ -277,7 +277,7 @@ class MemcachedStore implements CacheInterface
      * @param mixed     $value
      * @param float|int $seconds
      */
-    public function put($key, $value, $seconds = 0)
+    public function put(string $key, $value, $seconds = 0)
     {
         $this->getMemcached()
             ->set($this->prefix . $key, $value, $seconds);
@@ -310,7 +310,7 @@ class MemcachedStore implements CacheInterface
      *
      * @return bool
      */
-    public function add($key, $value, $seconds = 0)
+    public function add(string $key, $value, $seconds = 0)
     {
         return $this->getMemcached()
             ->add($this->prefix . $key, $value, $seconds);
@@ -324,7 +324,7 @@ class MemcachedStore implements CacheInterface
      *
      * @return bool|int
      */
-    public function increment($key, $value = 1)
+    public function increment(string $key, $value = 1)
     {
         return $this->getMemcached()
             ->increment($this->prefix . $key, $value);
@@ -338,7 +338,7 @@ class MemcachedStore implements CacheInterface
      *
      * @return bool|int
      */
-    public function decrement($key, $value = 1)
+    public function decrement(string $key, $value = 1)
     {
         return $this->getMemcached()
             ->decrement($this->prefix . $key, $value);
@@ -350,7 +350,7 @@ class MemcachedStore implements CacheInterface
      * @param string $key
      * @param mixed  $value
      */
-    public function forever($key, $value)
+    public function forever(string $key, $value)
     {
         $this->put($key, $value, 0);
     }
@@ -362,7 +362,7 @@ class MemcachedStore implements CacheInterface
      *
      * @return bool
      */
-    public function delete($key)
+    public function delete(string $key)
     {
         return $this->getMemcached()
             ->delete($this->prefix . $key);
@@ -402,7 +402,7 @@ class MemcachedStore implements CacheInterface
      *
      * @param string $prefix
      */
-    public function setPrefix($prefix)
+    public function setPrefix(string $prefix)
     {
         $this->prefix = ! empty($prefix) ? $prefix . ':' : '';
     }

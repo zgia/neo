@@ -2,8 +2,6 @@
 
 namespace Neo\Cache\Redis;
 
-use Neo\Exception\NeoException;
-
 /**
  * Class RedisKeyConfig
  */
@@ -36,7 +34,7 @@ class RedisKeyConfig
      * @param string $key
      * @param string $prefix
      *
-     * @throws NeoException
+     * @throws RedisException
      * @return string
      */
     public static function getKey(?string $key = null, string $prefix = '')
@@ -59,7 +57,7 @@ class RedisKeyConfig
         $keyValue = vsprintf($value, $keyParam);
 
         if (! $keyValue) {
-            throw new NeoException('Redis key is null.');
+            throw new RedisException('Redis key is null.');
         }
 
         return $prefix . $keyValue;

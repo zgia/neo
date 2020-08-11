@@ -35,7 +35,7 @@ class MemcachedNull implements CacheInterface
      *
      * @return mixed
      */
-    public function get($key)
+    public function get(string $key)
     {
         return null;
     }
@@ -49,7 +49,7 @@ class MemcachedNull implements CacheInterface
      *
      * @return bool
      */
-    public function set($key, $value, $expired = 0)
+    public function set(string $key, $value, $expired = 0)
     {
         return false;
     }

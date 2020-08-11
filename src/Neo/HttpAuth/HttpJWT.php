@@ -3,7 +3,7 @@
 namespace Neo\HttpAuth;
 
 use Firebase\JWT\JWT;
-use Neo\Exception\NeoException;
+use Neo\Exception\LogicException;
 use Neo\NeoLog;
 
 /**
@@ -12,16 +12,16 @@ use Neo\NeoLog;
 class HttpJWT extends Auth implements AuthInterface
 {
     // 验证间隔时间
-    private $jwt_interval_time = 0;
+    private $intervalTime = 0;
 
     // 过期时间
-    private $jwt_expired_time = 518400;
+    private $expiredTime = 518400;
 
     // 加密串
-    private $jwt_secretkey = '';
+    private $secretKey = '';
 
     // Algorithm used to sign the token, see https://tools.ietf.org/html/draft-ietf-jose-json-web-algorithms-40#section-3
-    private $jwt_algorithm = 'HS512';
+    private $algorithm = 'HS512';
 
     // JWT 校验后返回的数据信息
     private $data;
@@ -35,22 +35,22 @@ class HttpJWT extends Auth implements AuthInterface
     {
         parent::__construct($config);
 
-        if (! $config['jwt_secretkey']) {
-            throw new NeoException('You must config secretkey for JWT encode.');
+        if (empty($config['secret_key'])) {
+            throw new LogicException('You must config secretKey for JWT encode.');
         }
 
-        $this->jwt_secretkey = $config['jwt_secretkey'];
+        $this->secretKey = $config['secret_key'];
 
-        if ($config['jwt_algorithm']) {
-            $this->jwt_algorithm = $config['jwt_algorithm'];
+        if (! empty($config['algorithm'])) {
+            $this->algorithm = $config['algorithm'];
         }
 
-        if ($config['jwt_expired_time']) {
-            $this->jwt_expired_time = (int) $config['jwt_expired_time'];
+        if (! empty($config['expired_time'])) {
+            $this->expiredTime = $config['expired_time'];
         }
 
-        if ($config['jwt_interval_time']) {
-            $this->jwt_interval_time = (int) $config['jwt_interval_time'];
+        if (! empty($config['interval_time'])) {
+            $this->intervalTime = $config['interval_time'];
         }
     }
 
@@ -60,7 +60,7 @@ class HttpJWT extends Auth implements AuthInterface
      * @param string $authorization
      * @param array  $params
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return bool
      */
     public function authenticate(string $authorization = '', array $params = [])
@@ -70,7 +70,7 @@ class HttpJWT extends Auth implements AuthInterface
         try {
             $authed = $this->auth($authorization);
         } catch (\Exception $ex) {
-            NeoLog::error('auth', __FUNCTION__, [$_SERVER['HTTP_AUTHORIZATION'], $ex->getMessage()]);
+            NeoLog::error('auth', __FUNCTION__, [neo()->getRequest()->_server('authorization'), $ex->getMessage()]);
 
             $this->unauth();
         }
@@ -81,7 +81,7 @@ class HttpJWT extends Auth implements AuthInterface
     /**
      * 验证
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return bool
      */
     protected function auth()
@@ -93,19 +93,19 @@ class HttpJWT extends Auth implements AuthInterface
 
         // No token was able to be extracted from the authorization header
         if (! $jwt) {
-            throw new NeoException('HTTP/1.0 400 Bad Request', 400);
+            throw new LogicException('HTTP/1.0 400 Bad Request', 400);
         }
 
         try {
             $authed = JWT::decode(
                 $jwt,
-                $this->jwt_secretkey,
-                [$this->jwt_algorithm]
+                $this->secretKey,
+                [$this->algorithm]
             );
 
             $this->data = ['userId' => $authed->uid, 'userName' => $authed->unm, 'exp' => $authed->exp];
         } catch (\Exception $ex) {
-            throw new NeoException($ex->getMessage(), 401, $ex);
+            throw new LogicException($ex->getMessage(), 401, $ex);
         }
 
         return true;
@@ -116,7 +116,7 @@ class HttpJWT extends Auth implements AuthInterface
      * @param int    $userid
      * @param string $username
      *
-     * @throws NeoException
+     * @throws LogicException
      * @return mixed
      */
     public function getUserToken($server, $userid, $username)
@@ -127,8 +127,8 @@ class HttpJWT extends Auth implements AuthInterface
             // Issued at: time when the token was generated
             $issuedAt = time();
             // 项目请求没有间隔,登录后立刻验证
-            $notBefore = $issuedAt + $this->jwt_interval_time;
-            $expire = $notBefore + $this->jwt_expired_time;
+            $notBefore = $issuedAt + $this->intervalTime;
+            $expire = $notBefore + $this->expiredTime;
             $issuer = $server;
 
             /*
@@ -150,9 +150,9 @@ class HttpJWT extends Auth implements AuthInterface
              *
              * The output string can be validated at http://jwt.io/
              */
-            return JWT::encode($data, $this->jwt_secretkey, $this->jwt_algorithm);
+            return JWT::encode($data, $this->secretKey, $this->algorithm);
         } catch (\Exception $ex) {
-            throw new NeoException($ex->getMessage(), $ex->getCode());
+            throw new LogicException($ex->getMessage(), $ex->getCode());
         }
     }
 

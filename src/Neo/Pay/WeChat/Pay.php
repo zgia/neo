@@ -3,8 +3,9 @@
 namespace Neo\Pay\WeChat;
 
 use Neo\Exception\ParamException;
-use Neo\Exception\WeChatException;
 use Neo\NeoLog;
+use Neo\Pay\AbstractPay;
+use Neo\Pay\PayException;
 use Neo\Str;
 use Spatie\ArrayToXml\ArrayToXml;
 
@@ -13,6 +14,36 @@ use Spatie\ArrayToXml\ArrayToXml;
  */
 class Pay extends AbstractPay
 {
+    /**
+     * 微信返回SYSTEMERROR，BIZERR_NEED_RETRY
+     * SYSTEMERROR： 接口返回错误，系统超时等，请不要更换商户退款单号，请使用相同参数再次调用API。
+     * BIZERR_NEED_RETRY：退款业务流程错误，需要商户触发重试来解决，并发情况下，业务被拒绝，商户重试即可解决，请不要更换商户退款单号，请使用相同参数再次调用API。
+     */
+    const ERR_CODE_WEIXIN_SYSTEMERROR = 900999;
+
+    const ERR_CODE_WEIXIN_BIZERR_NEED_RETRY = 900999;
+
+    /**
+     * return_code 和 result_code 都为FAIL
+     */
+    const ERR_CODE_WEIXIN_BOTH_FAIL = 900000;
+
+    /**
+     * return_code 为 SUCCESS 和 result_code 为FAIL
+     * 但是err_code不是SYSTEMERROR或者BIZERR_NEED_RETRY
+     */
+    const ERR_CODE_WEIXIN_OTHER_FAIL = 900100;
+
+    /**
+     * 商户订单已支付，无需重复操作
+     */
+    const ERR_CODE_WEIXIN_ORDERPAID = 900200;
+
+    /**
+     * 没有数据返回
+     */
+    const ERR_CODE_WEIXIN_NO_DATA = 900500;
+
     // 微信支付URL
     protected $pay_url = 'https://api.mch.weixin.qq.com/';
 
@@ -41,12 +72,12 @@ class Pay extends AbstractPay
      *                      "key_file_path" => "/tmp/apiclient_key.pem"
      *                      ]
      *
-     * @throws WeChatException
+     * @throws PayException
      */
     public function __construct(array $config)
     {
         if (! isset($config['app_id']) || ! isset($config['partner_id']) || ! isset($config['app_pay_key'])) {
-            throw new WeChatException('Invalid config array.');
+            throw new PayException('Invalid config array.');
         }
 
         $this->app_id = $config['app_id'];
@@ -368,7 +399,7 @@ class Pay extends AbstractPay
                 }
 
                 return $response;
-            } catch (WeChatException $ex) {
+            } catch (PayException $ex) {
                 NeoLog::error('pay', 'exception', $ex->getMessage());
                 if ($ex->getMore()) {
                     NeoLog::error('pay', 'exception', $ex->getMore());
