@@ -170,7 +170,7 @@ class Page
      */
     public static function displaySimpleErrorPage(string $message = '', string $title = '', ?array $extension = null)
     {
-        $statusCode = is_array($extension) ? $extension['statusCode'] : null;
+        $statusCode = $extension['statusCode'] ?? 0;
 
         // 自定义一个错误页面
         $page = Config::get('server', 'redirect_page') ?: dirname(__FILE__) . DIRECTORY_SEPARATOR . 'error_page.php';
@@ -188,29 +188,31 @@ class Page
     }
 
     /**
-     * 刷新输出缓冲
+     * 刷新输出缓冲前检查是否使用ob_gzhandler。
+     * 如果在ob_start()前调用了ob_end_flush()的话，可以直接调用execFlush()
+     *
+     * @see execFlush()
      */
-    public static function doflush()
+    public static function doFlush()
     {
         static $gzip_handler = null;
         if ($gzip_handler === null) {
-            $gzip_handler = false;
-            $output_handlers = ob_list_handlers();
-            if (is_array($output_handlers)) {
-                foreach ($output_handlers as $handler) {
-                    if ($handler == 'ob_gzhandler') {
-                        $gzip_handler = true;
-                        break;
-                    }
-                }
-            }
+            $gzip_handler = in_array('ob_gzhandler', (array) ob_list_handlers());
         }
 
         if ($gzip_handler) {
-            // forcing a flush with this is very bad
             return;
         }
 
+        static::execFlush();
+    }
+
+    /**
+     * 刷新输出缓冲。
+     * 如果在ob_start()前调用了ob_end_flush()的话，可以直接调用此方法
+     */
+    public static function execFlush()
+    {
         if (ob_get_length() !== false) {
             ob_flush();
         }

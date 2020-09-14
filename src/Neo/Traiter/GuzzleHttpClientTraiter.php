@@ -48,9 +48,9 @@ trait GuzzleHttpClientTraiter
      *
      * @param int $timeout
      */
-    public function setTimeout($timeout)
+    public function setTimeout(int $timeout)
     {
-        $this->timeout = (int) $timeout;
+        $this->timeout = $timeout;
     }
 
     /**
@@ -58,7 +58,7 @@ trait GuzzleHttpClientTraiter
      *
      * @param bool $reload
      */
-    public function setReload($reload)
+    public function setReload(bool $reload)
     {
         $this->reload = $reload;
     }
@@ -89,7 +89,7 @@ trait GuzzleHttpClientTraiter
      * @throws LogicException
      * @return null|mixed
      */
-    public function post($url, array $params = [], $origin = false)
+    public function post(string $url, array $params = [], bool $origin = false)
     {
         return $this->httpClient('post', $url, $params, $origin);
     }
@@ -104,7 +104,7 @@ trait GuzzleHttpClientTraiter
      * @throws LogicException
      * @return null|mixed
      */
-    public function get($url, array $query = [], $origin = false)
+    public function get(string $url, array $query = [], bool $origin = false)
     {
         return $this->httpClient('get', $url, $query, $origin);
     }
@@ -121,7 +121,7 @@ trait GuzzleHttpClientTraiter
      * @throws LogicException
      * @return null|array|string
      */
-    public function httpClient($verb, $url, array $options = [], $origin = false, &$result = null)
+    public function httpClient(string $verb, string $url, array $options = [], bool $origin = false, ResponseInterface &$result = null)
     {
         $options['timeout'] || $options['timeout'] = $this->timeout;
 

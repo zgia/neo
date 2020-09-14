@@ -99,22 +99,6 @@ class Request extends SymfonyRequest
     }
 
     /**
-     * @param array                $query      The GET parameters
-     * @param array                $request    The POST parameters
-     * @param array                $attributes The request attributes (parameters parsed from the PATH_INFO, ...)
-     * @param array                $cookies    The COOKIE parameters
-     * @param array                $files      The FILES parameters
-     * @param array                $server     The SERVER parameters
-     * @param null|resource|string $content    The raw body data
-     *
-     * @return static
-     */
-    public static function init(array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
-    {
-        return new static($query, $request, $attributes, $cookies, $files, $server, $content);
-    }
-
-    /**
      * Create Request
      *
      * @param  string         $type
@@ -123,8 +107,6 @@ class Request extends SymfonyRequest
      */
     public static function createRequest(string $type = 'fpm', ?array $data = null)
     {
-        parent::setFactory(['Neo\Http\Request', 'init']);
-
         /**
          * @var Request $request
          */
@@ -293,15 +275,7 @@ class Request extends SymfonyRequest
                 }
                 break;
             case INPUT_TYPE_FILE:
-                if (! is_array($data)) {
-                    $data = [
-                        'name' => '',
-                        'type' => '',
-                        'tmp_name' => '',
-                        'error' => UPLOAD_ERR_NO_FILE,
-                        'size' => 0,
-                    ];
-                }
+                $data = static::formatUploadedFiles($data);
                 break;
             case INPUT_TYPE_UNIXTIME:
                 if (is_array($data)) {
@@ -333,6 +307,55 @@ class Request extends SymfonyRequest
         }
 
         return $data;
+    }
+
+    /**
+     * 转换批量上传的文件：$_FILES
+     * 从
+     *      $_FILES['files'] = ['name' => ['name1', 'name2], 'type' => ['image/jpg', 'image/png'], ...]
+     * 到
+     *      $_FILES['files'] = [['name' => 'name1', 'type' =>'image/jpg', ...], ['name' => 'name2', 'type' =>'image/png', ...]]
+     *
+     * @param null|array $data
+     *
+     * @return array
+     */
+    public static function formatUploadedFiles(?array $data = null)
+    {
+        $f = [];
+
+        if (is_array($data)) {
+            // 一次上传多个文件
+            if (is_array($data['name'])) {
+                for ($index = 0; $index < count($data['name']); ++$index) {
+                    $f[] = [
+                        'name' => trim(strval($data['name']["{$index}"])),
+                        'type' => trim(strval($data['type']["{$index}"])),
+                        'tmp_name' => trim(strval($data['tmp_name']["{$index}"])),
+                        'error' => intval($data['error']["{$index}"]),
+                        'size' => intval($data['size']["{$index}"]),
+                    ];
+                }
+            } else {
+                $f = [
+                    'name' => trim(strval($data['name'])),
+                    'type' => trim(strval($data['type'])),
+                    'tmp_name' => trim(strval($data['tmp_name'])),
+                    'error' => intval($data['error']),
+                    'size' => intval($data['size']),
+                ];
+            }
+        } else {
+            $f = [
+                'name' => '',
+                'type' => '',
+                'tmp_name' => '',
+                'error' => UPLOAD_ERR_NO_FILE,
+                'size' => 0,
+            ];
+        }
+
+        return $f;
     }
 
     /**
@@ -380,7 +403,7 @@ class Request extends SymfonyRequest
      */
     public function referer()
     {
-        return $this->headers->get('referer');
+        return $this->_header('referer');
     }
 
     /**
@@ -390,7 +413,7 @@ class Request extends SymfonyRequest
      */
     public function userAgent()
     {
-        return $this->headers->get('user-agent');
+        return $this->_header('user-agent');
     }
 
     /**

@@ -10,7 +10,6 @@ use Neo\Debug;
 use Neo\Http\Request;
 use Neo\I18n;
 use Neo\Neo;
-use Neo\Utility;
 
 /**
  * 返回Neo实例
@@ -435,8 +434,9 @@ function isBrowser(string $browserName = '')
  */
 function printOutJSON(array $jsonarray, int $statusCode = 200)
 {
+    // 输出对象
     if (! isset($jsonarray['data'])) {
-        $jsonarray['data'] = [];
+        $jsonarray['data'] = new stdClass();
     }
 
     neo()->getRequest()->setRequestFormat('json');
@@ -459,7 +459,7 @@ function byebye(?int $statusCode = null, $content = null)
         MySQLExplain::display();
     }
 
-    neo()->getResponse()->sendData($statusCode, is_array($content) ? json_encode($content) : $content);
+    neo()->getResponse()->sendData((int)$statusCode, is_array($content) ? json_encode($content) : $content);
 
     unload();
 }
@@ -517,52 +517,9 @@ function removeSysPath(?string $filename = null)
  *
  * @param mixed ...$args
  */
-function d(...$args)
+function dump(...$args)
 {
-    if (empty($args)) {
-        return;
-    }
-
-    $addtrace = null;
-    if ($args[0] == '__add_trace__') {
-        $addtrace = array_shift($args);
-    }
-
-    $lines = [];
-    if ($addtrace) {
-        $calledFrom = Debug::getTraces();
-        $lines = Debug::getTracesAsString(array_slice($calledFrom, 2));
-    }
-
-    $hr = PHP_EOL . '-------------------------' . PHP_EOL;
-
-    $errors = 'Time: ' . formatLongDate() . $hr;
-    foreach ($args as $arg) {
-        $errors .= '|==> ' . print_r($arg, true) . PHP_EOL;
-    }
-
-    if (neo()->getRequest()->isAjax()) {
-        printOutJSON([
-            'code' => 1,
-            'msg' => $errors,
-            'data' => $lines,
-        ]);
-    } elseif (Utility::isCli()) {
-        echo $errors, $hr, implode(PHP_EOL, $lines);
-    } else {
-        static $class = null;
-
-        if ($class == null) {
-            $class = '<style>pre{display:block;padding:10px;margin:20px;font-size:13px;line-height:1.5;color:#333;word-break:break-all;word-wrap:break-word;background-color:#f5f5f5;border:1px solid #ccc;border-radius:4px;overflow:auto;}code{padding:1px 4px;font-size:90%;color:#c7254e;background-color:#f9f2f4;border-radius:4px;border:1px solid #e1e1e1;-webkit-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);-moz-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);}</style>';
-            echo $class;
-        }
-
-        echo '<pre>', $errors, '</pre>';
-
-        if ($addtrace) {
-            echo '<pre><ol><li>', implode('</li><li>', $lines), '</li></ol></pre>';
-        }
-    }
+    Debug::dump(...$args);
 }
 
 /**
@@ -572,7 +529,7 @@ function d(...$args)
  */
 function x(...$args)
 {
-    d('__add_trace__', ...$args);
+    dump('__add_trace__', ...$args);
 
     exit();
 }

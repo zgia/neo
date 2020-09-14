@@ -126,9 +126,10 @@ class Neo implements \ArrayAccess
     /**
      * Neo constructor.
      *
-     * @param null|string $absPath
+     * @param null|string   $absPath
+     * @param null|callable $exceptionHandler
      */
-    public function __construct(string $absPath = null)
+    public function __construct(string $absPath = null, callable $exceptionHandler = null)
     {
         // 当前时间戳
         define('TIMENOW', time());
@@ -137,7 +138,7 @@ class Neo implements \ArrayAccess
         set_error_handler([$this, 'errorHandler'], E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED);
 
         // Exception Handler
-        set_exception_handler([$this, 'exceptionHandler']);
+        set_exception_handler(is_callable($exceptionHandler) ? $exceptionHandler : [$this, 'exceptionHandler']);
 
         // 系统所在目录
         $this->setAbsPath($absPath);
@@ -209,6 +210,8 @@ class Neo implements \ArrayAccess
     public function unload()
     {
         unset($this->db, $this->redis, $this->memcached, $this->request, $this->response);
+        
+        static::$instance = null;
     }
 
     /**
@@ -310,7 +313,7 @@ class Neo implements \ArrayAccess
     }
 
     /**
-     * 当前登录用户
+     * 当前操作用户
      *
      * @param array $user
      */
@@ -320,7 +323,7 @@ class Neo implements \ArrayAccess
     }
 
     /**
-     * 当前登录用户
+     * 当前操作用户
      *
      * @return array
      */

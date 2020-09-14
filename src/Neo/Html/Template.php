@@ -72,15 +72,15 @@ class Template
      */
     public function loadTemplateFile(string $file, bool $require_once = false)
     {
-        if (! file_exists($file) || ! is_readable($file)) {
-            throw new ResourceNotFoundException(__f('Template file(%s) is not exist or readable.', $file));
-        }
-
         // 放在Neo中的元素
         $neo = neo();
 
         if ($neo->getExplainSQL()) {
             return;
+        }
+
+        if (! file_exists($file) || ! is_readable($file)) {
+            throw new ResourceNotFoundException(__f('Template file(%s) is not exist or readable.', $file));
         }
 
         if (is_array($this->vars)) {
