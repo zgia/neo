@@ -713,20 +713,6 @@ abstract class AbstractDatabase
     }
 
     /**
-     * 返回数据库错误信息
-     *
-     * @return string
-     */
-    abstract public function getError();
-
-    /**
-     * 返回数据库错误码
-     *
-     * @return int
-     */
-    abstract public function getErrno();
-
-    /**
      * 设置是否从主数据库获取数据
      *
      * @param bool $fromMaster

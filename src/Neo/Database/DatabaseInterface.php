@@ -51,4 +51,19 @@ interface DatabaseInterface
      * 在主数据库上提交事务
      */
     public function commit();
+    
+    /**
+    * 错误码
+    *
+    *
+    * @return string|null
+    */
+   public function errorCode();
+
+   /**
+    * 错误信息
+    *
+    * @return string
+    */
+   public function errorInfo();
 }

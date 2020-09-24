@@ -7,7 +7,6 @@ use Doctrine\DBAL\Connection as DoctrineConnection;
 use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Driver\ResultStatement;
 use Doctrine\DBAL\DriverManager;
-use Doctrine\DBAL\FetchMode;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
 
@@ -50,6 +49,11 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
     protected $qb;
 
     /**
+     * @var \Throwable Query Exception
+     */
+    protected $exception;
+
+    /**
      * MySQL destructor
      */
     public function __destruct()
@@ -81,8 +85,8 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
 
             // 使用QueryBuilder生成SQL
             $this->qb = $this->connection->createQueryBuilder();
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
+        } catch (\Throwable $ex) {
+            $this->halt($ex);
         }
     }
 
@@ -164,8 +168,8 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
             $this->sql = 'DELETE FROM ' . $this->tableName($table) . $this->where($conditions);
 
             return $this->connection->delete($this->tableName($table), $conditions, $this->bindTypes);
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
+        } catch (\Throwable $ex) {
+            $this->halt($ex);
         }
 
         return -1;
@@ -214,9 +218,9 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
         try {
             $this->sql = trim($sql);
 
-            return $this->connection->fetchAssoc($sql, $this->binds, $this->bindTypes);
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
+            return $this->connection->fetchAssociative($sql, $this->binds, $this->bindTypes);
+        } catch (\Throwable $ex) {
+            $this->halt($ex);
         }
 
         return null;
@@ -235,9 +239,9 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
         try {
             $this->sql = trim($sql);
 
-            return $this->connection->fetchColumn($this->sql, $this->binds, 0, $this->bindTypes);
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
+            return $this->connection->fetchOne($this->sql, $this->binds, $this->bindTypes);
+        } catch (\Throwable $ex) {
+            $this->halt($ex);
         }
 
         return null;
@@ -254,9 +258,8 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
      */
     public function fetchArray(string $sql, ?string $element = null, ?string $key = null)
     {
-        $stmt = $this->read($sql);
-        $data = $stmt->fetchAll(FetchMode::ASSOCIATIVE);
-        $this->freeResult($stmt);
+        $this->sql = trim($sql);
+        $data = $this->fetchAll($this->sql);
 
         $element || $element = null;
         $key || $key = null;
@@ -265,73 +268,17 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
     }
 
     /**
-     * 获取多行数据，返回对象
+     * Prepares and executes an SQL query and returns the result as an associative array.
      *
-     * @param string $sql        语句
-     * @param string $class_name 对象类名
+     * @param string         $sql    the SQL query
+     * @param mixed[]        $params the query parameters
+     * @param int[]|string[] $types  the query parameter types
      *
-     * @return array
+     * @return mixed[]
      */
-    public function fetchObjectArray(string $sql, $class_name = 'stdClass')
+    public function fetchAll(string $sql, array $params = [], array $types = [])
     {
-        try {
-            $this->sql = trim($sql);
-
-            $class_name || $class_name = 'stdClass';
-
-            /**
-             * @var ResultStatement $rs
-             */
-            $rs = $this->connection->executeQuery($sql, $this->binds, $this->bindTypes);
-
-            $rs->setFetchMode(FetchMode::CUSTOM_OBJECT, $class_name);
-
-            return $rs->fetchAll();
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
-        }
-
-        return null;
-    }
-
-    /**
-     * 获取某行数据，返回对象
-     *
-     * @param string $sql        语句
-     * @param string $class_name Object Name
-     *
-     * @return null|object
-     */
-    public function fetchObject(string $sql, $class_name = 'stdClass')
-    {
-        try {
-            $this->sql = trim($sql);
-
-            $class_name || $class_name = 'stdClass';
-
-            /**
-             * @var ResultStatement $rs
-             */
-            $rs = $this->connection->executeQuery($sql, $this->binds, $this->bindTypes);
-
-            $rs->setFetchMode(FetchMode::CUSTOM_OBJECT, $class_name);
-
-            return $rs->fetch();
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
-        }
-
-        return null;
-    }
-
-    /**
-     * 释放查询结果
-     *
-     * @param ResultStatement $result The query result statement
-     */
-    public function freeResult($result)
-    {
-        $result->closeCursor();
+        return $this->connection->fetchAllAssociative($sql, $params, $types);
     }
 
     /**
@@ -359,9 +306,9 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
     public function foundRows()
     {
         try {
-            return $this->connection->fetchColumn('SELECT FOUND_ROWS() AS foundRows');
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
+            return $this->connection->fetchOne('SELECT FOUND_ROWS() AS foundRows');
+        } catch (\Throwable $ex) {
+            $this->halt($ex);
         }
 
         return -1;
@@ -419,14 +366,14 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
 
                 $this->numRows = $queryresult->columnCount();
             } else {
-                $queryresult = $this->connection->executeUpdate($this->sql, $this->binds, $this->bindTypes);
+                $queryresult = $this->connection->executeStatement($this->sql, $this->binds, $this->bindTypes);
             }
 
             $this->sql = '';
 
             return $queryresult;
-        } catch (\Exception $ex) {
-            $this->halt(new DatabaseException($ex->getMessage(), $ex->getCode(), $ex));
+        } catch (\Throwable $ex) {
+            $this->halt($ex);
         }
 
         return false;
@@ -471,20 +418,6 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
     }
 
     /**
-     * Prepares and executes an SQL query and returns the result as an associative array.
-     *
-     * @param string         $sql    the SQL query
-     * @param mixed[]        $params the query parameters
-     * @param int[]|string[] $types  the query parameter types
-     *
-     * @return mixed[]
-     */
-    public function fetchAll(string $sql, array $params = [], array $types = [])
-    {
-        return $this->connection->fetchAll($sql, $params, $types);
-    }
-
-    /**
      * Quotes a given input parameter
      *
      * @param mixed $input
@@ -502,11 +435,9 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
      *
      * @return string
      */
-    public function getError()
+    public function errorInfo()
     {
-        $error = $this->connection->errorInfo();
-
-        return "({$error[0]}/{$error[1]}): {$error[2]}";
+        return $this->exception->getMessage();
     }
 
     /**
@@ -514,23 +445,28 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
      *
      * @return int
      */
-    public function getErrno()
+    public function errorCode()
     {
-        return $this->connection->errorCode();
+        if (method_exists($this->exception, 'getSQLState')) {
+            return $this->exception->getSQLState();
+        }
+        return $this->exception->getCode();
     }
 
     /**
      * 抛出数据库异常
      *
-     * @param DatabaseException $ex Exception
+     * @param \Throwable $ex Exception
      *
      * @throws DatabaseException
      */
-    public function halt(DatabaseException $ex)
+    public function halt(\Throwable $ex)
     {
+        $this->exception = $ex;
+
         $this->rollBack();
 
-        parent::halt($ex);
+        parent::halt(new DatabaseException($ex->getMessage(),$ex->getCode(),$ex));
     }
 
     /**
@@ -545,8 +481,8 @@ class MySQL extends AbstractDatabase implements DatabaseInterface
     {
         $data = parent::generateErrorData($error, $errno);
 
-        $data['db_error'] = $this->getError();
-        $data['db_errno'] = $this->getErrno();
+        $data['db_error'] = $this->errorInfo();
+        $data['db_errno'] = $this->errorCode();
 
         return $data;
     }

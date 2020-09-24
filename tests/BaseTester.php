@@ -17,16 +17,9 @@ class BaseTester extends TestCase
      */
     public $db;
     
-    /**
-     * @var \Neo\Database\Query\QueryBuilder
-     */
-    public $qb;
-
     protected function setUp(): void
     {
         $this->db = \Neo\Neo::initDatabase(MYSQL_CONFIG);
-
-        $this->qb = $this->db->queryBuilder();
     }
 
     /**
@@ -36,5 +29,13 @@ class BaseTester extends TestCase
     {
         $time = date('Y-m-d H:i:s', time());
         echo "{$time} {$msg}" . PHP_EOL;
+    }
+
+    public function testUser(){
+        $user = $this->db->fetchRow('select * from user where userid = 1');
+        $this->assertEquals('zgia', $user['username']);
+
+        $account = $this->db->fetchOne('select count(*) from user');
+        $this->assertEquals(17, $account);
     }
 }

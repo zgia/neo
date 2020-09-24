@@ -15,3 +15,7 @@ require dirname(__FILE__, 2) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARA
 require_once ABS_PATH . DIRECTORY_SEPARATOR . 'config.php';
 
 require_once ABS_PATH . DIRECTORY_SEPARATOR . 'BaseTester.php';
+
+// 初始化NeoFrame
+Neo\Config::load($NEO_CONFIG);
+$neo = new Neo\Neo(ABS_PATH);

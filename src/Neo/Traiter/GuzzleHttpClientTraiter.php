@@ -154,9 +154,9 @@ trait GuzzleHttpClientTraiter
         $data = Debug::simplifyException($ex);
 
         if ($ex instanceof RequestException) {
-            $data['_request'] = \GuzzleHttp\Psr7\str($ex->getRequest());
+            $data['_request'] = \GuzzleHttp\Psr7\Message::toString($ex->getRequest());
             if ($ex->hasResponse()) {
-                $data['_response'] = \GuzzleHttp\Psr7\str($ex->getResponse());
+                $data['_response'] = \GuzzleHttp\Psr7\Message::toString($ex->getResponse());
             }
 
             $data['_context'] = $ex->getHandlerContext();

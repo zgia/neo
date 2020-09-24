@@ -9,6 +9,7 @@ use Monolog\Handler\RedisHandler;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger as Monologger;
+use Monolog\LogRecord;
 use Neo\Exception\ResourceNotFoundException;
 
 /**
@@ -48,7 +49,7 @@ class NeoLog
     /**
      * @var NeoLog
      */
-    private static $instance = null;
+    private static $instance;
 
     private function __construct()
     {
@@ -196,8 +197,7 @@ class NeoLog
         }
 
         if ($handlers) {
-            $logger = new Monologger('neolog', $handlers);
-            Monologger::setTimezone(getDatetimeZone());
+            $logger = new Monologger('neolog', $handlers, [], getDatetimeZone());
         } else {
             $logger = null;
         }
@@ -224,7 +224,7 @@ class NeoLog
         }
 
         $redisHandler = new RedisHandler($logRedis->getPhpRedis(), $rediskey, NeoLogUtility::getLogLevel());
-        $formatter = new NeoLogRedisLogstashFormatter('', $rediskey, null, '');
+        $formatter = new LogstashFormatter('', $rediskey);
         $redisHandler->setFormatter($formatter);
         $redisHandler->pushProcessor(new NeoLogRedisProcessor());
 
@@ -438,22 +438,17 @@ class NeoLogProcessor
     /**
      * 添加更多内容
      *
-     * @param array $record
+     * @param LogRecord $record
      *
-     * @return array
+     * @return LogRecord
      */
-    public function more(array $record)
+    public function more(LogRecord $record)
     {
-        $record['logid'] = $record['context']['logid'];
-        $record['logtime'] = NeoLogUtility::formatDate();
-        $record['type'] = $record['context']['type'];
-
-        $record['extra']['userid'] = (int) neo()->getUser()['userid'];
-        $record['extra']['username'] = (string) neo()->getUser()['username'];
-        $record['extra']['host'] = Utility::gethostname();
-        $record['extra']['traces'] = $record['context']['traces'];
-
-        unset($record['context']['traces'], $record['context']['type'], $record['context']['logid']);
+        $record->extra['userid'] = (int) neo()->getUser()['userid'];
+        $record->extra['username'] = (string) neo()->getUser()['username'];
+        $record->extra['host'] = Utility::gethostname();
+        $record->extra['traces'] = $record['context']['traces'];
+        $record->extra['logtime'] = NeoLogUtility::formatDate();
 
         return $record;
     }
@@ -465,11 +460,11 @@ class NeoLogProcessor
 class NeoLogFileProcessor extends NeoLogProcessor
 {
     /**
-     * @param array $record
+     * @param LogRecord $record
      *
      * @return array
      */
-    public function __invoke(array $record)
+    public function __invoke(LogRecord $record)
     {
         return $this->more($record);
     }
@@ -481,41 +476,13 @@ class NeoLogFileProcessor extends NeoLogProcessor
 class NeoLogRedisProcessor extends NeoLogProcessor
 {
     /**
-     * @param array $record
+     * @param LogRecord $record
      *
      * @return array
      */
-    public function __invoke(array $record)
+    public function __invoke(LogRecord $record)
     {
         return $this->more($record);
-    }
-}
-
-/**
- * Class NeoLogRedisLogstashFormatter
- */
-class NeoLogRedisLogstashFormatter extends LogstashFormatter
-{
-    /**
-     * @param array $record
-     *
-     * @return array
-     */
-    protected function formatV0(array $record)
-    {
-        $message = parent::formatV0($record);
-
-        if (isset($record['logid'])) {
-            $message['@logid'] = $record['logid'];
-        }
-
-        $message['@logtime'] = NeoLogUtility::formatDate();
-
-        if (isset($record['line'])) {
-            $message['@fileline'] = $record['line'];
-        }
-
-        return $message;
     }
 }
 
@@ -529,7 +496,7 @@ class NeoLogRotatingFileHandler extends RotatingFileHandler
     /**
      * {@inheritdoc}
      */
-    protected function write(array $record)
+    protected function write(LogRecord $record): void
     {
         // on the first record written, if the log is new, we should rotate (once per day)
         if ($this->mustRotate === null) {
