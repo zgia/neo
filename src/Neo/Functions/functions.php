@@ -36,7 +36,7 @@ function db(bool $init = true)
 /**
  * 格式化 Request Parameters
  *
- * @param string $gpc
+ * @param string $gpc g:GET, p:POST, c:COOKIE, r:REQUEST, f:FILE
  * @param array  $variables
  *
  * @return array
@@ -53,7 +53,7 @@ function input(string $gpc, array $variables)
 /**
  * 格式化 Request Parameters
  *
- * @param string $gpc
+ * @param string $gpc g:GET, p:POST, c:COOKIE, r:REQUEST, f:FILE
  * @param string $varname
  * @param int    $vartype
  *
@@ -143,18 +143,6 @@ function loadClass(string $class, string $namespace = null, bool $refresh = fals
     $_classes[$classK] = new $classK();
 
     return $_classes[$classK];
-}
-
-/**
- * 多语言翻译
- *
- * @param string $text
- *
- * @return string
- */
-function translate(string $text)
-{
-    return __($text);
 }
 
 /**
@@ -454,12 +442,23 @@ function byebye(?int $statusCode = null, $content = null)
 {
     Debug::logHttpContent($content);
 
+    $neo = neo();
+
     // 只有调试模式下，非ajax调用页面输出
-    if (! neo()->getRequest()->isAjax() && neo()->getExplainSQL()) {
+    if (! $neo->getRequest()->isAjax() && $neo->getExplainSQL()) {
         MySQLExplain::display();
     }
 
-    neo()->getResponse()->sendData((int)$statusCode, is_array($content) ? json_encode($content) : $content);
+    if (is_array($content)) {
+        $_dump = $neo->_dump;
+        if ($_dump) {
+            $content['_dump_'] = $_dump;
+        }
+
+        $content = json_encode($content);
+    }
+
+    $neo->getResponse()->sendData((int) $statusCode, $content);
 
     unload();
 }
@@ -530,6 +529,11 @@ function dump(...$args)
 function x(...$args)
 {
     dump('__add_trace__', ...$args);
+
+    $_dump = neo()->_dump;
+    if ($_dump) {
+        echo json_encode(['code' => 0, '_dump_' => $_dump]);
+    }
 
     exit();
 }

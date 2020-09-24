@@ -210,7 +210,7 @@ class Neo implements \ArrayAccess
     public function unload()
     {
         unset($this->db, $this->redis, $this->memcached, $this->request, $this->response);
-        
+
         static::$instance = null;
     }
 
@@ -611,7 +611,7 @@ class Neo implements \ArrayAccess
      */
     public function offsetGet($key)
     {
-        return $this->bindings[$key];
+        return $this->bindings[$key] ?? null;
     }
 
     /**
@@ -622,7 +622,11 @@ class Neo implements \ArrayAccess
      */
     public function offsetSet($key, $value)
     {
-        $this->bindings[$key] = $value;
+        if (empty($key)) {
+            $this->bindings[] = $value;
+        } else {
+            $this->bindings[$key] = $value;
+        }
     }
 
     /**
@@ -655,6 +659,8 @@ class Neo implements \ArrayAccess
      */
     public function __set($key, $value)
     {
-        $this[$key] = $value;
+        if (! empty($key)) {
+            $this[$key] = $value;
+        }
     }
 }
