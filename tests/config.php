@@ -30,11 +30,17 @@ $NEO_CONFIG['database'] = [
             'password' => 'liyuntian',
             'charset' => 'utf8mb4',
         ],
-        'master' => ['host' => '127.0.0.1'],
-        'slaves' => [
-            ['host' => '127.0.0.1'],
+        'primary' => ['host' => '127.0.0.1'],
+        'replica' => [
+            ['host' => 'localhost'],
             ['host' => '127.0.0.1'],
         ],
+        'logger' => \Neo\Database\Logger::class,
+    ],
+    'sqlite' => [
+        'driver' => 'pdo_sqlite',
+        'prefix' => '',
+        'url' => 'sqlite:////Users/zgia/Desktop/wx/msg.db',
         'logger' => \Neo\Database\Logger::class,
     ],
 ];

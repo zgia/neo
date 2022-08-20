@@ -75,10 +75,6 @@ class Template
         // 放在Neo中的元素
         $neo = neo();
 
-        if ($neo->getExplainSQL()) {
-            return;
-        }
-
         if (! file_exists($file) || ! is_readable($file)) {
             throw new ResourceNotFoundException(__f('Template file(%s) is not exist or readable.', $file));
         }

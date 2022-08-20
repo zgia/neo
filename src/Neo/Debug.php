@@ -21,7 +21,7 @@ class Debug
             if (! is_array($request)) {
                 $request = (array) $request;
             }
-            $request['db_slave'] = $neo->getDB()->getSlaveIndex();
+            $request['db_replica'] = $neo->getDB()->getReplicaIndex();
             $request['execution_time'] = number_format(getExecutionTime(), 3);
             $request['http_request'] = (string) $neo->getRequest();
 

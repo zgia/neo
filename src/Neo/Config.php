@@ -10,7 +10,7 @@ class Config
     /**
      * @var array
      */
-    private static $config;
+    private static array $config = [];
 
     /**
      * 加载配置文件
@@ -94,16 +94,20 @@ class Config
      */
     public static function parseDatabaseConfig(array $config)
     {
+        if ($config['driver'] == 'pdo_sqlite') {
+            return $config;
+        }
+
         /*
-         * Master-Slave Connection
+         * Primary ReadReplica Connection
          *
          * $conn = DriverManager::getConnection(array(
-         *    'wrapperClass' => 'Doctrine\DBAL\Connections\MasterSlaveConnection',
+         *    'wrapperClass' => 'Doctrine\DBAL\Connections\PrimaryReadReplicaConnection',
          *    'driver' => 'pdo_mysql',
-         *    'master' => array('user' => '', 'password' => '', 'host' => '', 'dbname' => ''),
-         *    'slaves' => array(
-         *        array('user' => 'slave1', 'password', 'host' => '', 'dbname' => ''),
-         *        array('user' => 'slave2', 'password', 'host' => '', 'dbname' => ''),
+         *    'primary' => array('user' => '', 'password' => '', 'host' => '', 'dbname' => ''),
+         *    'replica' => array(
+         *        array('user' => 'replica1', 'password', 'host' => '', 'dbname' => ''),
+         *        array('user' => 'replica2', 'password', 'host' => '', 'dbname' => ''),
          *    )
          * ));
          *
@@ -113,48 +117,47 @@ class Config
             $config['base']['port'] = 3306;
         }
 
-        // master => 127.0.0.1
-        // master => [host => 127.0.0.1]
-        // slaves => 127.0.0.1
-        // slaves => [127.0.0.1, 127.0.0.2]
-        // slaves => [[host => 127.0.0.1], [host => 127.0.0.2]]
+        // primary => 127.0.0.1
+        // primary => [host => 127.0.0.1]
+        // replica => 127.0.0.1
+        // replica => [127.0.0.1, 127.0.0.2]
+        // replica => [[host => 127.0.0.1], [host => 127.0.0.2]]
 
         // 处理其他格式的master
-        if (is_string($config['master'])) {
+        if (is_string($config['primary'])) {
             // master => 127.0.0.1
-            $config['master'] = ['host' => $config['master']];
+            $config['primary'] = ['host' => $config['primary']];
         }
-        $config['master'] = array_merge($config['base'], $config['master']);
+        $config['primary'] = array_merge($config['base'], $config['primary']);
 
-        if ($config['withSlave'] && ! empty($config['slaves'])) {
-            $slaves = $config['slaves'];
+        if ($config['withReplica'] && ! empty($config['replica'])) {
+            $replica = $config['replica'];
 
-            // 处理其他格式的slave
-            if (is_string($slaves)) {
-                // slaves => 127.0.0.1
-                $config['slaves'] = [['host' => $slaves]];
-            } elseif (is_array($slaves) && is_string($slaves[0])) {
-                $config['slaves'] = [];
-                // slaves => [127.0.0.1, 127.0.0.1]
-                foreach ($slaves as $slave) {
-                    $config['slaves'][] = ['host' => $slave];
+            // 处理其他格式的从库
+            if (is_string($replica)) {
+                // replica => 127.0.0.1
+                $config['replica'] = [['host' => $replica]];
+            } elseif (is_array($replica) && is_string($replica[0])) {
+                $config['replica'] = [];
+                // replica => [127.0.0.1, 127.0.0.1]
+                foreach ($replica as $r) {
+                    $config['replica'][] = ['host' => $r];
                 }
             }
 
             $tmp = [];
-            foreach ($config['slaves'] as $slave) {
-                $tmp[] = array_merge($config['base'], $slave);
+            foreach ($config['replica'] as $r) {
+                $tmp[] = array_merge($config['base'], $r);
             }
 
-            $config['slaves'] = $tmp;
+            $config['replica'] = $tmp;
         } else {
-            $master = $config['master'];
+            $master = $config['primary'];
             $config = array_merge($config, $master);
 
-            unset($config['master'], $config['slaves']);
+            unset($config['primary'], $config['replica']);
         }
-
-        unset($config['base'], $config['withSlave']);
+        unset($config['base'], $config['withReplica']);
 
         return $config;
     }

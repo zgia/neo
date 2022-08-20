@@ -5,7 +5,6 @@ use Carbon\CarbonImmutable;
 use Neo\Config;
 use Neo\Database\AbstractDatabase;
 use Neo\Database\MySQL;
-use Neo\Database\MySQLExplain;
 use Neo\Debug;
 use Neo\Http\Request;
 use Neo\I18n;
@@ -36,7 +35,7 @@ function db(bool $init = true)
 /**
  * 格式化 Request Parameters
  *
- * @param string $gpc g:GET, p:POST, c:COOKIE, r:REQUEST, f:FILE
+ * @param string $gpc       g:GET, p:POST, c:COOKIE, r:REQUEST, f:FILE
  * @param array  $variables
  *
  * @return array
@@ -53,7 +52,7 @@ function input(string $gpc, array $variables)
 /**
  * 格式化 Request Parameters
  *
- * @param string $gpc g:GET, p:POST, c:COOKIE, r:REQUEST, f:FILE
+ * @param string $gpc     g:GET, p:POST, c:COOKIE, r:REQUEST, f:FILE
  * @param string $varname
  * @param int    $vartype
  *
@@ -443,11 +442,6 @@ function byebye(?int $statusCode = null, $content = null)
     Debug::logHttpContent($content);
 
     $neo = neo();
-
-    // 只有调试模式下，非ajax调用页面输出
-    if (! $neo->getRequest()->isAjax() && $neo->getExplainSQL()) {
-        MySQLExplain::display();
-    }
 
     if (is_array($content)) {
         $_dump = $neo->_dump;

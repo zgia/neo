@@ -18,4 +18,4 @@ require_once ABS_PATH . DIRECTORY_SEPARATOR . 'BaseTester.php';
 
 // 初始化NeoFrame
 Neo\Config::load($NEO_CONFIG);
-$neo = new Neo\Neo(ABS_PATH);
+$neo = new Neo\Neo();

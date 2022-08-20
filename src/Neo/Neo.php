@@ -11,7 +11,7 @@ use Neo\Cache\Redis\RedisNull;
 use Neo\Database\AbstractDatabase;
 use Neo\Database\DatabaseException;
 use Neo\Database\MySQL;
-use Neo\Database\MySQLExplain;
+use Neo\Database\SQLite;
 use Neo\Exception\FileException;
 use Neo\Exception\ResourceNotFoundException;
 use Neo\Html\Page;
@@ -72,14 +72,6 @@ class Neo implements \ArrayAccess
      * @var AbstractDatabase
      */
     private $db;
-
-    /**
-     * 是否使用MySQLExplain初始化数据库连接，在页面上显示SQL Explain信息
-     * 0: 不启用
-     * 1: 显示SQL Explain，SQL一行显示
-     * 2: 显示SQL Explain，SQL格式化显示
-     */
-    private $explainSQL = 0;
 
     /**
      * Redis object.
@@ -437,38 +429,36 @@ class Neo implements \ArrayAccess
      *                 'password' => 'db_password',
      *                 'charset' => 'utf8mb4',
      *             ],
-     *             'master' => ['host' => '127.0.0.1'],
-     *             'slaves' => [
+     *             'primary' => ['host' => '127.0.0.1'],
+     *             'replica' => [
      *                 ['host' => '127.0.0.1'],
      *                 ['host' => '127.0.0.1'],
      *             ],
      *             'logger' => \Neo\Database\Logger::class,
      *         ]
      *
-     * @param array $config    数据库参数
-     * @param bool  $withSlave 是否启用从数据库
+     * @param array $config      数据库参数
+     * @param bool  $withReplica 是否启用从数据库
      *
      * @return AbstractDatabase
      */
-    public static function initDatabase(array $config, bool $withSlave = true)
+    public static function initDatabase(array $config, bool $withReplica = true)
     {
-        $config['withSlave'] = $withSlave;
+        $config['withReplica'] = $withReplica;
         $config = Config::parseDatabaseConfig($config);
 
-        // 是否在页面上显示SQL Explain信息
-        if (neo()->getExplainSQL()) {
-            $db = new MySQLExplain();
-        } else {
-            switch ($config['driver']) {
+        switch ($config['driver']) {
                 case 'pdo_mysql':
                 case 'mysqli':
                     $db = new MySQL();
+                break;
+                case 'pdo_sqlite':
+                    $db = new SQLite();
                     break;
                 default:
                     $db = null;
                     break;
             }
-        }
 
         if ($db == null) {
             throw new DatabaseException(__f('Invalid mysql driver %s.', $config['driver']));
@@ -483,37 +473,18 @@ class Neo implements \ArrayAccess
     /**
      * 获取数据库连接
      *
-     * @param bool $init 如果没有链接，则初始化
+     * @param bool  $init   如果没有链接，则初始化
+     * @param mixed $driver 使用哪个驱动
      *
      * @return AbstractDatabase
      */
-    public function getDB(bool $init = true)
+    public function getDB(bool $init = true, $driver = 'mysql')
     {
         if ($init && ! ($this->db && $this->db instanceof AbstractDatabase)) {
-            $this->db = static::initDatabase(Config::get('database', 'mysql'));
+            $this->db = static::initDatabase(Config::get('database', $driver));
         }
 
         return $this->db;
-    }
-
-    /**
-     * 是否使用MySQLExplain初始化数据库连接，在页面上显示SQL Explain信息
-     *
-     * @param int $ex
-     */
-    public function setExplainSQL(int $ex = 0)
-    {
-        $this->explainSQL = $ex;
-    }
-
-    /**
-     * 是否使用MySQLExplain初始化数据库连接，在页面上显示SQL Explain信息
-     *
-     * @return int
-     */
-    public function getExplainSQL()
-    {
-        return $this->explainSQL;
     }
 
     /**

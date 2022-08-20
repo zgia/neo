@@ -15,7 +15,8 @@ class MySQLTest extends BaseTester
 
     public function testSQL()
     {
-        $qb = $this->qb;
+        /*
+        $qb = $this->db->queryBuilder();
 
         $qb->select('*')
             ->from('user')
@@ -23,7 +24,15 @@ class MySQLTest extends BaseTester
             ->setMaxResults(1);
 
         $this->db->setBinds($qb->getParameters(), $qb->getParameterTypes());
+        
         $result = $this->db->fetchRow($qb->getSQL());
+        // */
+
+        $params = [ 1];
+        foreach($params as $param){
+            $this->db->bindValue($param);
+        }
+        $result = $this->db->fetchRow("select * from user where userid = ?");
 
         $user = ['userid' => $result['userid'], 'username' => $result['username']];
 

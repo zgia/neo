@@ -171,9 +171,10 @@ class NeoLog
     private function log(string $type = '')
     {
         $handlers = [];
+        $logTypes = Config::get('logger', 'types', ['file']);
 
         // 写到文件
-        if (in_array('file', Config::get('logger', 'types'))) {
+        if (in_array('file', $logTypes)) {
             $fileHandler = $this->log2File($type);
             if ($fileHandler) {
                 $handlers[] = $fileHandler;
@@ -181,7 +182,7 @@ class NeoLog
         }
 
         // 写到Redis
-        if (in_array('redis', Config::get('logger', 'types'))) {
+        if (in_array('redis', $logTypes)) {
             $redisHandler = $this->log2RedisWithLogstash();
             if ($redisHandler) {
                 $handlers[] = $redisHandler;
@@ -189,7 +190,7 @@ class NeoLog
         }
 
         // 写到php://stderr
-        if (in_array('stderr', Config::get('logger', 'types'))) {
+        if (in_array('stderr', $logTypes)) {
             $streamHandler = $this->log2Stream();
             if ($streamHandler) {
                 $handlers[] = $streamHandler;
@@ -242,7 +243,11 @@ class NeoLog
      */
     private function log2File(string $type)
     {
-        $fileCfg = Config::get('logger', 'file');
+        $fileCfg = Config::get('logger', 'file', [
+            'pertype' => true, // 是否每个$type一个日志文件
+            'typename' => 'neo', // 如果pertype==false，可以指定日志文件名称，默认为neo
+            'formatter' => 'json', // 文件内容格式，默认为json，可选：line, json
+        ]);
 
         // 是否只输出到一个日志文件，PERTYPE：每个type一个日志文件
         if (empty($fileCfg['pertype'])) {
@@ -414,10 +419,6 @@ class NeoLogUtility
      */
     public static function getLogLevel()
     {
-        if ($level = Config::get('logger', 'level')) {
-            return $level;
-        }
-
         // DEBUG = 100;
         // INFO = 200;
         // NOTICE = 250;
@@ -426,7 +427,7 @@ class NeoLogUtility
         // CRITICAL = 500;
         // ALERT = 550;
         // EMERGENCY = 600;
-        return 300;
+        return (int) Config::get('logger', 'level', 300);
     }
 }
 

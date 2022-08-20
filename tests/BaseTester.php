@@ -1,5 +1,6 @@
 <?php
 
+use Neo\Config;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -16,10 +17,12 @@ class BaseTester extends TestCase
      * @var \Neo\Database\MySQL
      */
     public $db;
+
+    public $driver = 'mysql';
     
     protected function setUp(): void
     {
-        $this->db = \Neo\Neo::initDatabase(MYSQL_CONFIG);
+        $this->db = \Neo\Neo::initDatabase(Config::get('database', $this->driver));
     }
 
     /**

@@ -3,9 +3,9 @@
 namespace Neo\Database;
 
 /**
- * MySQL
+ * SQLite
  */
-class MySQL extends PDO
+class SQLite extends PDO
 {
     /**
      * MySQL destructor
@@ -24,7 +24,7 @@ class MySQL extends PDO
      */
     public function describe(string $table)
     {
-        return $this->fetchAll('DESCRIBE ' . $this->stripTags($table));
+        return $this->fetchAll('pragma table_info(' . $this->quote($this->stripTags($table)) . ')');
     }
 
     /**
@@ -36,7 +36,7 @@ class MySQL extends PDO
      */
     public function explain(string $sql)
     {
-        return $this->fetchAll('EXPLAIN ' . $sql);
+        return $this->fetchRow('EXPLAIN QUERY PLAN ' . $sql);
     }
 
     /**
@@ -48,8 +48,6 @@ class MySQL extends PDO
      */
     public function showCreateTable(string $table)
     {
-        $data = $this->fetchAll('SHOW CREATE TABLE ' . $this->stripTags($table));
-
-        return $data[0]['Create Table'] ?? '';
+        return $this->fetchOne('SELECT sql FROM sqlite_schema WHERE name = ' . $this->quote($this->stripTags($table)));
     }
 }

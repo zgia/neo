@@ -79,7 +79,7 @@ abstract class AbstractDatabase
      *
      * @var int
      */
-    protected $slaveIndex = 0;
+    protected $replicaIndex = 0;
 
     /**
      * 返回数据库配置
@@ -103,12 +103,12 @@ abstract class AbstractDatabase
         $this->setTablePrefix($config['prefix']);
         unset($config['prefix']);
 
-        if (! empty($config['slaves'])) {
-            $slaveCount = count($config['slaves']);
+        if (! empty($config['replica'])) {
+            $count = count($config['replica']);
             // ip不变，从库不变
-            $this->slaveIndex = $slaveCount > 1 ? ord(md5(neo()->getRequest()->getClientIp())[0]) % $slaveCount : 0;
+            $this->replicaIndex = $count > 1 ? ord(md5(neo()->getRequest()->getClientIp())[0]) % $count : 0;
 
-            $config['slaves'] = [$config['slaves'][$this->slaveIndex]];
+            $config['replica'] = [$config['replica'][$this->replicaIndex]];
             $config['wrapperClass'] = 'Neo\Database\MSConnection';
         }
 
@@ -118,43 +118,13 @@ abstract class AbstractDatabase
     }
 
     /**
-     * 从PDOStatement::debugDumpParams中解析出SQL
-     *
-     * @param ResultStatement $stmt
-     *
-     * @return string
-     */
-    public function getSQLFromDebugDumpParams(ResultStatement $stmt)
-    {
-        ob_start();
-        $stmt->debugDumpParams();
-        $dump = ob_get_contents();
-        ob_end_clean();
-
-        // prepare后，无需绑定变量，则debugDumpParams返回的数据中不存在Sent SQL
-        // SQL [22] ...
-        // Sent SQL [22] ...
-        $ma = [];
-        preg_match_all('/(Sent )?SQL\: \[(\d+)\] /', $dump, $ma);
-
-        $length = $ma[2][1] ?? $ma[2][0];
-        if (! $length) {
-            return '';
-        }
-
-        $flag = $ma[0][1] ?? $ma[0][0];
-
-        return trim(substr($dump, stripos($dump, $flag) + strlen($flag), $length));
-    }
-
-    /**
      * 使用哪个从库
      *
      * @return int
      */
-    public function getSlaveIndex()
+    public function getReplicaIndex()
     {
-        return $this->slaveIndex;
+        return $this->replicaIndex;
     }
 
     /**
@@ -461,7 +431,7 @@ abstract class AbstractDatabase
      *
      * @param mixed $value
      */
-    protected function bindValue($value)
+    public function bindValue($value)
     {
         $this->binds[] = $value;
         $this->bindTypes[] = $this->getParameterType($value);
