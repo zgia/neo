@@ -95,7 +95,7 @@ class Request extends SymfonyRequest
      */
     public function isAjax()
     {
-        return $this->ajax || $this->_server('neo_ajax');
+        return $this->ajax || $this->neoServer('neo_ajax');
     }
 
     /**
@@ -130,7 +130,7 @@ class Request extends SymfonyRequest
             $request = static::create($uri, $method, $parameters, $cookies, $files, $server, $content);
         }
 
-        $_req = $request->_request(null, true);
+        $_req = $request->neoRequest(null, true);
 
         $request->setParams($_req);
         $request->setAjax((bool) ($_req['ajax'] ?? ($_req['AJAX'] ?? false)));
@@ -158,10 +158,10 @@ class Request extends SymfonyRequest
 
         switch ($gpc) {
             case 'r':
-                $source = $this->_request();
+                $source = $this->neoRequest();
                 break;
             case 's':
-                $source = $this->_server();
+                $source = $this->neoServer();
                 break;
             default:
                 $source = $this->{$superglobal[$gpc]}->all();
@@ -403,7 +403,7 @@ class Request extends SymfonyRequest
      */
     public function referer()
     {
-        return $this->_header('referer');
+        return $this->neoHeader('referer');
     }
 
     /**
@@ -413,7 +413,7 @@ class Request extends SymfonyRequest
      */
     public function userAgent()
     {
-        return $this->_header('user-agent');
+        return $this->neoHeader('user-agent');
     }
 
     /**
@@ -423,7 +423,7 @@ class Request extends SymfonyRequest
      *
      * @return null|array|string
      */
-    public function _post(?string $key = null)
+    public function neoPost(?string $key = null)
     {
         if ($key) {
             return $this->request->get($key);
@@ -439,7 +439,7 @@ class Request extends SymfonyRequest
      *
      * @return null|array|string
      */
-    public function _get(?string $key = null)
+    public function neoGet(?string $key = null)
     {
         if ($key) {
             return $this->query->get($key);
@@ -455,7 +455,7 @@ class Request extends SymfonyRequest
      *
      * @return null|array|string
      */
-    public function _file(?string $key = null)
+    public function neoFile(?string $key = null)
     {
         if ($key) {
             return $this->files->get($key);
@@ -471,7 +471,7 @@ class Request extends SymfonyRequest
      *
      * @return null|array|string
      */
-    public function _cookie(?string $key = null)
+    public function neoCookie(?string $key = null)
     {
         if ($key) {
             return $this->cookies->get($key);
@@ -487,7 +487,7 @@ class Request extends SymfonyRequest
      *
      * @return null|array|string
      */
-    public function _header(?string $key = null)
+    public function neoHeader(?string $key = null)
     {
         if ($key) {
             return $this->headers->get($key);
@@ -501,9 +501,9 @@ class Request extends SymfonyRequest
      *
      * @param string $key
      *
-     * @return array
+     * @return array|string|null
      */
-    public function _server(?string $key = null)
+    public function neoServer(?string $key = null)
     {
         static $_svr = null;
 
@@ -514,7 +514,7 @@ class Request extends SymfonyRequest
 
             foreach ($this->headers->all() as $k => $v) {
                 $k = strtoupper(str_replace('-', '_', $k));
-                if (\in_array($k, ['CONTENT_TYPE', 'CONTENT_LENGTH', 'CONTENT_MD5'], true)) {
+                if (in_array($k, ['CONTENT_TYPE', 'CONTENT_LENGTH', 'CONTENT_MD5'], true)) {
                     $tmp[$k] = implode(', ', $v);
                 } else {
                     $tmp['HTTP_' . $k] = implode(', ', $v);
@@ -539,7 +539,7 @@ class Request extends SymfonyRequest
      *
      * @return null|array|string
      */
-    public function _request(?string $key = null, bool $reload = false)
+    public function neoRequest(?string $key = null, bool $reload = false)
     {
         static $_req = null;
 

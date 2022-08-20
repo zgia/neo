@@ -121,15 +121,14 @@ class Neo implements \ArrayAccess
      *
      * @var Neo
      */
-    private static $instance = null;
+    private static $instance;
 
     /**
      * Neo constructor.
      *
-     * @param null|string   $absPath
      * @param null|callable $exceptionHandler
      */
-    public function __construct(string $absPath = null, callable $exceptionHandler = null)
+    public function __construct(callable $exceptionHandler = null)
     {
         // 当前时间戳
         define('TIMENOW', time());
@@ -141,7 +140,7 @@ class Neo implements \ArrayAccess
         set_exception_handler(is_callable($exceptionHandler) ? $exceptionHandler : [$this, 'exceptionHandler']);
 
         // 系统所在目录
-        $this->setAbsPath($absPath);
+        $this->setAbsPath();
 
         static::setInstance($this);
 
@@ -246,14 +245,14 @@ class Neo implements \ArrayAccess
 
     /**
      * Set the base path for the application.
-     *
-     * @param string $absPath
      */
-    public function setAbsPath($absPath)
+    public function setAbsPath()
     {
-        $this->abspath = rtrim($absPath, '\/');
+        $paths = Config::get('dir');
 
-        $this->setPaths();
+        $this->abspath = rtrim($paths['abs_path'] ?? '', '\/');
+
+        $this->setPaths($paths);
     }
 
     /**
@@ -268,23 +267,25 @@ class Neo implements \ArrayAccess
 
     /**
      * 设置多个目录
+     *
+     * @param null|array $paths
      */
-    public function setPaths()
+    public function setPaths(?array $paths = null)
     {
         // 控制器路径
-        $this->bindings['controllers_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Controller';
+        $this->bindings['controllers_dir'] = $paths['controllers'];
 
         // 模版文件路径
-        $this->bindings['templates_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'View';
+        $this->bindings['templates_dir'] = $paths['templates'];
 
         // 语言文件路径
-        $this->bindings['languages_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Language';
+        $this->bindings['languages_dir'] = $paths['languages'];
 
         // 数据缓存路径
-        $this->bindings['datastore_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'datastore';
+        $this->bindings['datastore_dir'] = $paths['datastore'];
 
         // 资源文件路径
-        $this->bindings['content_dir'] = $this->getAbsPath() . DIRECTORY_SEPARATOR . 'public';
+        $this->bindings['content_dir'] = $paths['content'];
 
         // 日志文件存放路径
         $this->bindings['log_dir'] = Config::get('logger', 'dir');
@@ -597,7 +598,7 @@ class Neo implements \ArrayAccess
      *
      * @return bool
      */
-    public function offsetExists($key)
+    public function offsetExists($key): bool
     {
         return isset($this->bindings[$key]);
     }
@@ -620,7 +621,7 @@ class Neo implements \ArrayAccess
      * @param string $key
      * @param mixed  $value
      */
-    public function offsetSet($key, $value)
+    public function offsetSet($key, $value): void
     {
         if (empty($key)) {
             $this->bindings[] = $value;
@@ -634,7 +635,7 @@ class Neo implements \ArrayAccess
      *
      * @param string $key
      */
-    public function offsetUnset($key)
+    public function offsetUnset($key): void
     {
         unset($this->bindings[$key]);
     }

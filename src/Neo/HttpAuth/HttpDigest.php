@@ -60,7 +60,7 @@ class HttpDigest extends Auth implements AuthInterface
     {
         $uniqid = uniqid('');
 
-        $server = neo()->getRequest()->_server();
+        $server = neo()->getRequest()->neoServer();
 
         if ($server['PHP_AUTH_DIGEST']) {
             $digestString = $server['PHP_AUTH_DIGEST'];

@@ -121,12 +121,13 @@ class File implements CacheInterface
      * 获取缓存
      *
      * @param string $key
+     * @param string $cacheDir
      *
      * @return array
      */
-    public static function read(string $key)
+    public static function read(string $key, string $cacheDir = '')
     {
-        $file = static::getFilePath($key);
+        $file = static::getFilePath($key, $cacheDir);
 
         $cache = [];
 

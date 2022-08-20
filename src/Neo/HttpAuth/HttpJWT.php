@@ -70,7 +70,7 @@ class HttpJWT extends Auth implements AuthInterface
         try {
             $authed = $this->auth($authorization);
         } catch (\Exception $ex) {
-            NeoLog::error('auth', __FUNCTION__, [neo()->getRequest()->_server('authorization'), $ex->getMessage()]);
+            NeoLog::error('auth', __FUNCTION__, [neo()->getRequest()->neoServer('authorization'), $ex->getMessage()]);
 
             $this->unauth();
         }
