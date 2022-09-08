@@ -18,9 +18,9 @@ class MySQL extends PDO
     /**
      * 返回表结构
      *
-     * @param string $table Table name
+     * @param string $table 表名
      *
-     * @return array Fields in table. Keys are name and values are type
+     * @return array 表结构
      */
     public function describe(string $table)
     {
@@ -30,7 +30,7 @@ class MySQL extends PDO
     /**
      * Explain SQL
      *
-     * @param string $sql
+     * @param string $sql SQL 语句
      *
      * @return mixed[]
      */
@@ -42,9 +42,9 @@ class MySQL extends PDO
     /**
      * 返回创建表的语句
      *
-     * @param string $table Table name
+     * @param string $table 表名
      *
-     * @return string Create table sql
+     * @return string 创建表的语句
      */
     public function showCreateTable(string $table)
     {

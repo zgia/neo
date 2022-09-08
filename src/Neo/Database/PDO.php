@@ -109,31 +109,30 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 执行 INSERT INTO 语句
      *
-     * @param string $table   Name of the table into which data should be inserted
-     * @param array  $data    Array of SQL values
-     * @param bool   $replace INSERT or REPLACE
+     * @param string $table 表名
+     * @param array  $data  待插入的数据
      *
-     * @return int
+     * @return int 影响行数
      */
-    public function insert(string $table, array $data, bool $replace = false)
+    public function insert(string $table, array $data)
     {
         $this->clearBinds();
 
-        $action = $replace ? 'REPLACE' : 'INSERT';
+        $table = $this->tableName($table);
 
-        $sql = "{$action} INTO " . $this->tableName($table) . ' SET ' . $this->assignmentList($data);
+        $this->sql = 'INSERT INTO ' . $table . ' (' . implode(', ', array_keys($data)) . ') VALUES (' . implode(', ', array_values($data)) . ')';
 
-        return $this->write($sql);
+        return $this->connection->insert($table, $data, $this->getBindTypes());
     }
 
     /**
-     * 执行 UPDATE 语句
+     * 执行 UPDATE 语句。支持 field=field+1 的语法
      *
-     * @param string $table
-     * @param array  $data
-     * @param array  $conditions
+     * @param string $table      表名
+     * @param array  $data       待更新的数据
+     * @param array  $conditions 更新条件
      *
-     * @return int the number of affected rows
+     * @return int 影响行数
      */
     public function update(string $table, array $data, ?array $conditions = null)
     {
@@ -147,20 +146,22 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 执行 DELETE 语句
      *
-     * @param string $table
-     * @param array  $conditions
+     * @param string $table      表名
+     * @param array  $conditions 删除条件
      *
      * @throws DatabaseException
-     * @return int               the number of affected rows
+     * @return int               影响行数
      */
     public function delete(string $table, array $conditions)
     {
         $this->clearBinds();
 
         try {
-            $this->sql = 'DELETE FROM ' . $this->tableName($table) . $this->where($conditions);
+            $table = $this->tableName($table);
 
-            return $this->connection->delete($this->tableName($table), $conditions, $this->bindTypes);
+            $this->sql = 'DELETE FROM ' . $table . $this->where($conditions);
+
+            return $this->connection->delete($table, $conditions, $this->getBindTypes());
         } catch (\Throwable $ex) {
             $this->halt($ex);
         }
@@ -171,12 +172,17 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 在主数据库上执行的"写"操作，比如：insert，update，delete等等
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql        待执行的语句
+     * @param bool   $clearBinds 是否清理之前绑定的参数及类型
      *
-     * @return int
+     * @return int 影响行数
      */
-    public function write(string $sql)
+    public function write(string $sql, bool $clearBinds = false)
     {
+        if ($clearBinds) {
+            $this->clearBinds();
+        }
+
         $this->reading = false;
 
         $this->rowCount = $this->execute($sql);
@@ -187,12 +193,17 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 在从/只读数据库上执行的"读"操作，比如：select
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql        待执行的语句
+     * @param bool   $clearBinds 是否清理之前绑定的参数及类型
      *
      * @return ResultStatement
      */
-    public function read(string $sql)
+    public function read(string $sql, bool $clearBinds = false)
     {
+        if ($clearBinds) {
+            $this->clearBinds();
+        }
+
         $this->reading = true;
 
         return $this->execute($sql);
@@ -201,7 +212,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 查询一条记录，返回关联数组格式
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql 待执行的语句
      *
      * @throws DatabaseException
      * @return array
@@ -211,7 +222,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
         try {
             $this->sql = trim($sql);
 
-            return $this->connection->fetchAssociative($sql, $this->binds, $this->bindTypes);
+            return $this->connection->fetchAssociative($sql, $this->getBinds(), $this->getBindTypes());
         } catch (\Throwable $ex) {
             $this->halt($ex);
         }
@@ -222,7 +233,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 查询一个值，比如返回某张表的行数
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql 待执行的语句
      *
      * @throws DatabaseException
      * @return false|mixed
@@ -232,7 +243,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
         try {
             $this->sql = trim($sql);
 
-            return $this->connection->fetchOne($this->sql, $this->binds, $this->bindTypes);
+            return $this->connection->fetchOne($this->sql, $this->getBinds(), $this->getBindTypes());
         } catch (\Throwable $ex) {
             $this->halt($ex);
         }
@@ -243,9 +254,9 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 查询多条记录，返回关联数组
      *
-     * @param string $sql     The text of the SQL query to be executed
-     * @param string $element array element, if null,return all element in row
-     * @param string $key     array key
+     * @param string $sql     待执行的语句
+     * @param string $element 数组元素, 如果 null，则返回数据全部内容
+     * @param string $key     数组键值
      *
      * @return array
      */
@@ -263,9 +274,9 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * Prepares and executes an SQL query and returns the result as an associative array.
      *
-     * @param string         $sql    the SQL query
-     * @param mixed[]        $params the query parameters
-     * @param int[]|string[] $types  the query parameter types
+     * @param string         $sql    待执行的语句
+     * @param mixed[]        $params 待绑定的数据
+     * @param int[]|string[] $types  待绑定的数据类型
      *
      * @return mixed[]
      */
@@ -335,7 +346,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * {@inheritdoc}
      *
-     * @param string $sql
+     * @param string $sql 待执行的语句
      *
      * @return bool|int|ResultStatement|string
      */
@@ -366,9 +377,9 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 返回表结构
      *
-     * @param string $table Table name
+     * @param string $table 表名
      *
-     * @return array Fields in table. Keys are name and values are type
+     * @return array 表结构
      */
     public function describe(string $table)
     {
@@ -378,7 +389,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * Explain SQL
      *
-     * @param string $sql
+     * @param string $sql SQL 语句
      *
      * @return mixed[]
      */
@@ -390,9 +401,9 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 返回创建表的语句
      *
-     * @param string $table Table name
+     * @param string $table 表名
      *
-     * @return string Create table sql
+     * @return string 创建表的语句
      */
     public function showCreateTable(string $table)
     {
@@ -402,8 +413,8 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * Quotes a given input parameter
      *
-     * @param mixed $input
-     * @param int   $type
+     * @param mixed $input Something to be quoted
+     * @param int   $type  Type of something
      *
      * @return mixed
      */
@@ -454,8 +465,8 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 生成数据库错误信息数组
      *
-     * @param string $error
-     * @param int    $errno
+     * @param string $error 错误信息
+     * @param int    $errno 错误码
      *
      * @return array
      */

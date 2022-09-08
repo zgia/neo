@@ -42,14 +42,14 @@ abstract class AbstractDatabase
     protected $queryarray = [];
 
     /**
-     * The parameters to bind to the query
+     * 待绑定到语句中的参数
      *
      * @var array
      */
     protected $binds = [];
 
     /**
-     * The types of parameters to bind to the query
+     * 待绑定到语句中的参数的类型
      *
      * @var array
      */
@@ -94,7 +94,7 @@ abstract class AbstractDatabase
     /**
      * 解析数据库配置，以便支持Doctrine
      *
-     * @param array $config
+     * @param array $config 数据库配置
      *
      * @return array
      */
@@ -130,7 +130,7 @@ abstract class AbstractDatabase
     /**
      * 创建一个数据库连接
      *
-     * @param array $config Database config
+     * @param array $config 数据库配置
      *
      * @throws DBALException
      * @return bool|DoctrineConnection
@@ -140,58 +140,59 @@ abstract class AbstractDatabase
     /**
      * 执行 INSERT INTO 语句
      *
-     * @param string $table   Name of the table into which data should be inserted
-     * @param array  $data    Array of SQL values
-     * @param bool   $replace INSERT or REPLACE
+     * @param string $table 表名
+     * @param array  $data  待插入的数据
      *
-     * @return int
+     * @return int 影响行数
      */
-    abstract public function insert(string $table, array $data, bool $replace = false);
+    abstract public function insert(string $table, array $data);
 
     /**
      * 执行 UPDATE 语句
      *
-     * @param string $table
-     * @param array  $data
-     * @param array  $conditions
+     * @param string $table      表名
+     * @param array  $data       待更新的数据
+     * @param array  $conditions 更新条件
      *
-     * @return int the number of affected rows
+     * @return int 影响行数
      */
     abstract public function update(string $table, array $data, ?array $conditions = null);
 
     /**
      * 执行 DELETE 语句
      *
-     * @param string $table
-     * @param array  $conditions
+     * @param string $table      表名
+     * @param array  $conditions 删除条件
      *
      * @throws DatabaseException
-     * @return int               the number of affected rows
+     * @return int               影响行数
      */
     abstract public function delete(string $table, array $conditions);
 
     /**
      * 在主数据库上执行的"写"操作，比如：insert，update，delete等等
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql        待执行的语句
+     * @param bool   $clearBinds 是否清理之前绑定的参数及类型
      *
-     * @return int
+     * @return int 影响行数
      */
-    abstract public function write(string $sql);
+    abstract public function write(string $sql, bool $clearBinds = false);
 
     /**
      * 在从/只读数据库上执行的"读"操作，比如：select
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql        待执行的语句
+     * @param bool   $clearBinds 是否清理之前绑定的参数及类型
      *
      * @return ResultStatement
      */
-    abstract public function read(string $sql);
+    abstract public function read(string $sql, bool $clearBinds = false);
 
     /**
      * 查询一条记录，返回关联数组格式
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql 待执行的语句
      *
      * @throws DatabaseException
      * @return array
@@ -201,7 +202,7 @@ abstract class AbstractDatabase
     /**
      * 查询一个值，比如返回某张表的行数
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql 待执行的语句
      *
      * @throws DatabaseException
      * @return false|mixed
@@ -211,9 +212,9 @@ abstract class AbstractDatabase
     /**
      * 查询多条记录，返回关联数组
      *
-     * @param string $sql     The text of the SQL query to be executed
-     * @param string $element array element, if null,return all element in row
-     * @param string $key     array key
+     * @param string $sql     待执行的语句
+     * @param string $element 数组元素, 如果 null，则返回数据全部内容
+     * @param string $key     数组键值
      *
      * @return array
      */
@@ -348,9 +349,9 @@ abstract class AbstractDatabase
     /**
      * 生成WHERE字句
      *
-     * @param array  $conditions
-     * @param string $glue
-     * @param bool   $withWhere
+     * @param array  $conditions 条件
+     * @param string $glue       拼接为WHERE字句的关键字
+     * @param bool   $withWhere  是否添加WHERE关键字
      *
      * @return string
      */
@@ -429,7 +430,7 @@ abstract class AbstractDatabase
     /**
      * 检查待绑定的值及其类型
      *
-     * @param mixed $value
+     * @param mixed $value 待绑定的值
      */
     public function bindValue($value)
     {
@@ -438,9 +439,9 @@ abstract class AbstractDatabase
     }
 
     /**
-     * The types of parameters to bind to the query
+     * The types of parameters to bind to the quoteery
      *
-     * @param mixed $param
+     * @param mixed $param 待绑定的参数
      *
      * @return int
      */
@@ -485,8 +486,8 @@ abstract class AbstractDatabase
     /**
      * 设置参数绑定
      *
-     * @param array $binds
-     * @param array $bindTypes
+     * @param array $binds     待绑定到语句中的参数
+     * @param array $bindTypes 待绑定到语句中的参数的类型
      */
     public function setBinds(array $binds, array $bindTypes)
     {
@@ -506,7 +507,7 @@ abstract class AbstractDatabase
     /**
      * 数组转换为表字段赋值，用于insert或者update
      *
-     * @param array $arr
+     * @param array $arr 键值对
      *
      * @return string
      */
@@ -531,8 +532,8 @@ abstract class AbstractDatabase
 
     /**
      * 数据库名、表名、字段名只应该含：字母、数字、.、-、_等符号
-     * @param string      $field
-     * @param null|string $allowTags
+     * @param string      $field     待处理的值
+     * @param null|string $allowTags 附加的保留字符串
      *
      * @return string
      */
@@ -553,7 +554,7 @@ abstract class AbstractDatabase
     /**
      * 获取表名，可能带前缀
      *
-     * @param string $table
+     * @param string $table 表明
      *
      * @return string
      */
@@ -575,7 +576,7 @@ abstract class AbstractDatabase
     /**
      * 设置表前缀
      *
-     * @param string $prefix
+     * @param string $prefix 表前缀
      */
     public function setTablePrefix(string $prefix)
     {
@@ -585,7 +586,7 @@ abstract class AbstractDatabase
     /**
      * 返回带单引号的转义过的 LIKE 字符串
      *
-     * @param string $string The string to be escaped
+     * @param string $string 待转义的字符串
      *
      * @return string
      */
@@ -595,28 +596,28 @@ abstract class AbstractDatabase
     }
 
     /**
-     * Tests whether the string has an SQL operator
+     * 检查一条语句中是否存在判断操作符
      *
-     * @param string $str
+     * @param string $sql SQL 语句
      *
      * @return bool
      */
-    public function hasOperator(string $str)
+    public function hasOperator(string $sql)
     {
         return (bool) preg_match(
             '/(<|>|!|=|\sIS NULL|\sIS NOT NULL|\sEXISTS|\sBETWEEN|\sLIKE|\sIN\s*\(|\s)/i',
-            trim($str)
+            trim($sql)
         );
     }
 
     /**
-     * Returns the SQL string operator
+     * 获取语句中的操作符
      *
-     * @param string $str
+     * @param string $sql SQL 语句
      *
      * @return string
      */
-    public function getOperator(string $str)
+    public function getOperator(string $sql)
     {
         $_operators = [
             '\s*(?:<|>|!)?=\s*',  // =, <=, >=, !=
@@ -663,8 +664,8 @@ abstract class AbstractDatabase
     /**
      * 生成数据库错误信息数组
      *
-     * @param string $error
-     * @param int    $errno
+     * @param string $error 错误信息
+     * @param int    $errno 错误码
      *
      * @return array
      */
@@ -705,8 +706,8 @@ abstract class AbstractDatabase
     /**
      * 使用hint强制走主库
      *
-     * @param string $sql
-     * @param string $hint
+     * @param string $sql  SQL 语句
+     * @param string $hint Hint
      *
      * @return string
      */

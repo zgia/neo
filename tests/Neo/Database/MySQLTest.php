@@ -28,11 +28,16 @@ class MySQLTest extends BaseTester
         $result = $this->db->fetchRow($qb->getSQL());
         // */
 
+        $this->db->update('user',['username'=>'zgia', 'openid'=>'cde',0=>'dateline=dateline+1'], ['userid'=>1]);
+
+        $this->db->clearBinds();
         $params = [ 1];
         foreach($params as $param){
             $this->db->bindValue($param);
         }
         $result = $this->db->fetchRow("select * from user where userid = ?");
+
+        print_r($result);
 
         $user = ['userid' => $result['userid'], 'username' => $result['username']];
 

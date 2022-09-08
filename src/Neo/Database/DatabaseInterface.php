@@ -10,14 +10,14 @@ interface DatabaseInterface
     /**
      * 连接到一个数据库
      *
-     * @param array $config Database config
+     * @param array $config 数据库配置
      */
     public function connect(array $config);
 
     /**
      * 执行一条查询语句
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql 待执行的语句
      *
      * @return string
      */
@@ -51,19 +51,18 @@ interface DatabaseInterface
      * 在主数据库上提交事务
      */
     public function commit();
-    
-    /**
-    * 错误码
-    *
-    *
-    * @return string|null
-    */
-   public function errorCode();
 
-   /**
-    * 错误信息
-    *
-    * @return string
-    */
-   public function errorInfo();
+    /**
+     * 错误码
+     *
+     * @return null|string
+     */
+    public function errorCode();
+
+    /**
+     * 错误信息
+     *
+     * @return string
+     */
+    public function errorInfo();
 }
