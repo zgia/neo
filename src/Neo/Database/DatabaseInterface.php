@@ -9,10 +9,10 @@ interface DatabaseInterface
 {
     /**
      * 连接到一个数据库
-     *
-     * @param array $config 数据库配置
+     * 
+     * @return bool TRUE: 成功建立链接, FALSE: 链接已经存在
      */
-    public function connect(array $config);
+    public function connect();
 
     /**
      * 执行一条查询语句

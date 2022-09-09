@@ -128,16 +128,6 @@ abstract class AbstractDatabase
     }
 
     /**
-     * 创建一个数据库连接
-     *
-     * @param array $config 数据库配置
-     *
-     * @throws DBALException
-     * @return bool|DoctrineConnection
-     */
-    abstract public function getConnection(array $config);
-
-    /**
      * 执行 INSERT INTO 语句
      *
      * @param string $table 表名

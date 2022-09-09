@@ -46,4 +46,17 @@ class SQLiteTest extends BaseTester
         //$this->assertEquals(md5($table), '5e9e33f35adfd56f06766c2002e2309b');
 
     }
+
+    public function testDatabasePlatform()
+    {
+        $platform = $this->db->getConnection()->getDatabasePlatform()->getName();
+        $this->assertEquals($platform, 'sqlite');
+    }
+
+
+    public function testTruncate()
+    {
+        //$sql = $this->db->truncate('logcontent');
+        //$this->assertEquals($sql, 'DELETE FROM logcontent');
+    }
 }

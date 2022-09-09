@@ -9,6 +9,7 @@ use Doctrine\DBAL\Driver\ResultStatement;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\SQLParserUtils;
 
 /**
@@ -68,20 +69,24 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 连接到一个数据库
      *
-     * @param array $config Database config
+     * @return bool TRUE: 成功建立链接, FALSE: 链接已经存在
      */
-    public function connect(array $config)
+    public function connect()
     {
-        $config = parent::parseConfig($config);
+        if ($this->connection !== null) {
+            return false;
+        }
 
         try {
-            $this->connection = $this->getConnection($config);
+            $this->connection = $this->createConnection($this->getConfig());
 
             // 使用QueryBuilder生成SQL
             $this->qb = $this->connection->createQueryBuilder();
         } catch (\Throwable $ex) {
             $this->halt($ex);
         }
+
+        return true;
     }
 
     /**
@@ -92,7 +97,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
      * @throws DBALException
      * @return bool|DoctrineConnection
      */
-    public function getConnection(array $params)
+    public function createConnection(array $params)
     {
         $configuration = new Configuration();
 
@@ -105,6 +110,16 @@ class PDO extends AbstractDatabase implements DatabaseInterface
         }
 
         return DriverManager::getConnection($params, $configuration);
+    }
+
+    /**
+     * 返回当前的数据库连接
+     *
+     * @return null|DoctrineConnection
+     */
+    public function getConnection()
+    {
+        return $this->connection;
     }
 
     /**
@@ -462,6 +477,18 @@ class PDO extends AbstractDatabase implements DatabaseInterface
         }
 
         return false;
+    }
+
+    /**
+     * Truncate Table
+     *
+     * @param string $table 表名
+     */
+    public function truncate(string $table)
+    {
+        $this->clearBinds();
+
+        $this->execute($this->connection->getDatabasePlatform()->getTruncateTableSQL($table));
     }
 
     /**

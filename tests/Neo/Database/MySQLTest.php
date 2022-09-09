@@ -1,5 +1,7 @@
 <?php
 
+use Doctrine\DBAL\Schema\Table;
+
 /**
  * @backupGlobals disabled
  *
@@ -47,6 +49,19 @@ class MySQLTest extends BaseTester
     public function testShowCreateTable()
     {
         $table = $this->db->showCreateTable('user');
-        $this->assertEquals(md5($table), '5e9e33f35adfd56f06766c2002e2309b');
+        $this->assertEquals(md5($table), 'ac819157901985c4baa327dbdd1aa52c');
+    }
+
+    public function testDatabasePlatform()
+    {
+        $platform = $this->db->getConnection()->getDatabasePlatform()->getName();
+        $this->assertEquals($platform, 'mysql');
+    }
+
+    public function testCreateTable()
+    {
+        $sql = $this->db->getConnection()->getDatabasePlatform()->getCreateTableSQL(new Table('log'));
+        x($sql);
+        //$this->assertEquals($sql, 'TRUNCATE logcontent');
     }
 }

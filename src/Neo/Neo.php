@@ -465,7 +465,8 @@ class Neo implements \ArrayAccess
         }
 
         // 创建数据库连接
-        $db->connect($config);
+        $db->parseConfig($config);
+        $db->connect();
 
         return $db;
     }

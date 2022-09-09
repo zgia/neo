@@ -42,7 +42,7 @@ class SQLite extends PDO
     /**
      * 返回创建表的语句
      *
-      * @param string $table 表名
+     * @param string $table 表名
      *
      * @return string 创建表的语句
      */
