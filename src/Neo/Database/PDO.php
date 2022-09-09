@@ -9,6 +9,7 @@ use Doctrine\DBAL\Driver\ResultStatement;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
+use Doctrine\DBAL\SQLParserUtils;
 
 /**
  * Class to interface with a database
@@ -123,6 +124,95 @@ class PDO extends AbstractDatabase implements DatabaseInterface
         $this->sql = 'INSERT INTO ' . $table . ' (' . implode(', ', array_keys($data)) . ') VALUES (' . implode(', ', array_values($data)) . ')';
 
         return $this->connection->insert($table, $data, $this->getBindTypes());
+    }
+
+    /**
+     * 批量插入数据
+     *
+     * @param string $table 表名
+     * @param array  $data  待插入的数据
+     * @param int    $size  每次插入多少条数据
+     *
+     * @return int 影响行数
+     */
+    public function insertBulk(string $table, array $data, int $size = 50)
+    {
+        $rowCount = count($data);
+
+        $table = $this->tableName($table);
+
+        $size = max($size, 10);
+
+        // 用于构造(?,?,?),(?,?,?),(?,?,?)...
+        $funcMark = function ($mark, $size) {
+            return rtrim(str_repeat($mark . ',', $size), ',');
+        };
+
+        $columns = array_keys($data[0]);
+        $mark = '(' . $funcMark('?', count($columns)) . ')';
+
+        $sqlx = 'INSERT INTO ' . $table . ' (' . implode(', ', $columns) . ') VALUES ';
+
+        // 每次插入 $size 条数据
+        try {
+            if ($rowCount >= $size) {
+                $chunkedData = array_chunk($data, $size);
+                $lastKey = count($chunkedData) - 1;
+                if (count($chunkedData[$lastKey]) < $size) {
+                    $data = $chunkedData[$lastKey];
+                    unset($chunkedData[$lastKey]);
+                } else {
+                    unset($data);
+                    $data = [];
+                }
+
+                $sql = $sqlx . $funcMark($mark, $size);
+
+                $this->executeInsertBulk($sql, $chunkedData);
+            }
+
+            if ($data) {
+                $sql = $sqlx . $funcMark($mark, count($data));
+
+                $this->executeInsertBulk($sql, [$data]);
+            }
+        } catch (\Throwable $e) {
+            $this->connection->handleExceptionDuringQuery($e, $sql);
+        }
+
+        return $rowCount;
+    }
+
+    /**
+     * 执行批量插入
+     *
+     * @param string $sql         SQL 语句
+     * @param array  $chunkedData 分割后的数组
+     */
+    private function executeInsertBulk(string $sql, array $chunkedData)
+    {
+        $connection = $this->connection->getWrappedConnection();
+        $stmt = $connection->prepare($sql);
+
+        foreach ($chunkedData as $data) {
+            $this->clearBinds();
+
+            foreach ($data as $val) {
+                foreach ($val as $v) {
+                    $this->bindValue($v);
+                }
+            }
+
+            [$sql, $params, $types] = SQLParserUtils::expandListParameters($sql, $this->getBinds(), $this->getBindTypes());
+
+            $bindIndex = 1;
+            foreach ($params as $value) {
+                $stmt->bindValue($bindIndex, $value, $types[$bindIndex - 1] ?? ParameterType::STRING);
+
+                ++$bindIndex;
+            }
+            $stmt->execute();
+        }
     }
 
     /**
