@@ -240,7 +240,7 @@ class Neo implements \ArrayAccess
      */
     public function setAbsPath()
     {
-        $paths = Config::get('dir');
+        $paths = Config::get('dir', null, []);
 
         $this->abspath = rtrim($paths['abs_path'] ?? '', '\/');
 
@@ -265,22 +265,22 @@ class Neo implements \ArrayAccess
     public function setPaths(?array $paths = null)
     {
         // 控制器路径
-        $this->bindings['controllers_dir'] = $paths['controllers'];
+        $this->bindings['controllers_dir'] = $paths['controllers'] ?? null;
 
         // 模版文件路径
-        $this->bindings['templates_dir'] = $paths['templates'];
+        $this->bindings['templates_dir'] = $paths['templates'] ?? null;
 
         // 语言文件路径
-        $this->bindings['languages_dir'] = $paths['languages'];
+        $this->bindings['languages_dir'] = $paths['languages'] ?? null;
 
         // 数据缓存路径
-        $this->bindings['datastore_dir'] = $paths['datastore'];
+        $this->bindings['datastore_dir'] = $paths['datastore'] ?? null;
 
         // 资源文件路径
-        $this->bindings['content_dir'] = $paths['content'];
+        $this->bindings['content_dir'] = $paths['content'] ?? null;
 
         // 日志文件存放路径
-        $this->bindings['log_dir'] = Config::get('logger', 'dir');
+        $this->bindings['log_dir'] = Config::get('logger', 'dir', null);
     }
 
     /**
@@ -290,7 +290,7 @@ class Neo implements \ArrayAccess
      */
     private function checkLoggerDir()
     {
-        if (! in_array('file', Config::get('logger', 'types'))) {
+        if (! in_array('file', Config::get('logger', 'types', []))) {
             return;
         }
 
@@ -444,6 +444,10 @@ class Neo implements \ArrayAccess
      */
     public static function initDatabase(array $config, bool $withReplica = true)
     {
+        if (empty($config)) {
+            throw new DatabaseException(__f('Invalid database config.'));
+        }
+
         $config['withReplica'] = $withReplica;
         $config = Config::parseDatabaseConfig($config);
 
@@ -461,7 +465,7 @@ class Neo implements \ArrayAccess
             }
 
         if ($db == null) {
-            throw new DatabaseException(__f('Invalid mysql driver %s.', $config['driver']));
+            throw new DatabaseException(__f('Invalid database driver %s.', $config['driver']));
         }
 
         // 创建数据库连接
@@ -482,7 +486,7 @@ class Neo implements \ArrayAccess
     public function getDB(bool $init = true, $driver = 'mysql')
     {
         if ($init && ! ($this->db && $this->db instanceof AbstractDatabase)) {
-            $this->db = static::initDatabase(Config::get('database', $driver));
+            $this->db = static::initDatabase(Config::get('database', $driver, []));
         }
 
         return $this->db;
@@ -501,7 +505,7 @@ class Neo implements \ArrayAccess
         $redis = null;
 
         try {
-            Redis::addServer((array) Config::get('redis', $app));
+            Redis::addServer((array) Config::get('redis', $app, []));
 
             $redis = Redis::getInstance($type);
         } catch (RedisException $ex) {

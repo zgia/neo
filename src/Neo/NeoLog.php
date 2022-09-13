@@ -154,7 +154,11 @@ class NeoLog
                 JSON_UNESCAPED_UNICODE
             ) . PHP_EOL . PHP_EOL;
 
-            error_log($msg, 3, NeoLogUtility::getFileLogDir() . DIRECTORY_SEPARATOR . 'neologerror.log');
+            if (in_array('file', NeoLogUtility::getLogTypes())) {
+                error_log($msg, 3, NeoLogUtility::getFileLogDir() . DIRECTORY_SEPARATOR . 'neologerror.log');
+            } else {
+                error_log($msg);
+            }
 
             unset($args, $msg);
         }
@@ -171,7 +175,7 @@ class NeoLog
     private function log(string $type = '')
     {
         $handlers = [];
-        $logTypes = Config::get('logger', 'types', ['file']);
+        $logTypes = NeoLogUtility::getLogTypes();
 
         // 写到文件
         if (in_array('file', $logTypes)) {
@@ -292,9 +296,8 @@ class NeoLog
         }
 
         $stream = new StreamHandler('php://' . $type, NeoLogUtility::getLogLevel());
-
-        $simple_format = '[%logtime%] %channel%.%level_name% %logid% %message% %context% %extra% %line%' . PHP_EOL;
-        $stream->setFormatter(new LineFormatter($simple_format));
+        $stream->setFormatter($this->logFormatter('stderr'));
+        $stream->pushProcessor(new NeoLogStreamProcessor());
 
         $this->streamHandler = $stream;
 
@@ -311,8 +314,12 @@ class NeoLog
     private function logFormatter(string $fmt = 'line')
     {
         switch ($fmt) {
+            case 'stderr':
+                $simple_format = '[%extra.logtime%] %channel%.%level_name% %context.logid% %message% %context% %extra% %extra.line%' . PHP_EOL;
+                $formatter = new LineFormatter($simple_format);
+                break;
             case 'line':
-                $simple_format = '[%logtime%] %channel%.%level_name% %logid% %message% %context% %extra% %line%' . PHP_EOL;
+                $simple_format = '[%extra.logtime%] %channel%.%level_name% %context.logid% %message% %context% %extra% %extra.line%' . PHP_EOL;
                 $formatter = new LineFormatter($simple_format);
                 break;
             case 'json':
@@ -366,6 +373,13 @@ class NeoLog
  */
 class NeoLogUtility
 {
+    private static $line = '';
+
+    public static function getLine()
+    {
+        return static::$line;
+    }
+
     /**
      * 获取日志调用路径
      *
@@ -373,7 +387,7 @@ class NeoLogUtility
      */
     public static function getTraces()
     {
-        $traces = Debug::getTraces();
+        $traces = Debug::getTraces(0, 9);
 
         // 是否使用路由
         $routing = false;
@@ -383,6 +397,9 @@ class NeoLogUtility
                 break;
             }
         }
+
+        // 调用入口
+        static::$line = Debug::traceToString($trace);
 
         // 4 表示移除NeoLog中的调用路径
         // 8 表示移除初始化到加载控制器的通用加载路径(4步)，加上NeoLog调用路径(4步)
@@ -410,6 +427,16 @@ class NeoLogUtility
     public static function getFileLogDir()
     {
         return neo()['log_dir'];
+    }
+
+    /**
+     * 获取日志类型，目前支持：文件、Redis和stderr，可以同时支持多个类型
+     *
+     * @return []
+     */
+    public static function getLogTypes()
+    {
+        return Config::get('logger', 'types', ['stderr']);
     }
 
     /**
@@ -445,13 +472,31 @@ class NeoLogProcessor
      */
     public function more(LogRecord $record)
     {
-        $record->extra['userid'] = (int) neo()->getUser()['userid'];
-        $record->extra['username'] = (string) neo()->getUser()['username'];
-        $record->extra['host'] = Utility::gethostname();
-        $record->extra['traces'] = $record['context']['traces'];
-        $record->extra['logtime'] = NeoLogUtility::formatDate();
+        $user = neo()->getUser();
+        $record->extra = [
+            'userid' => (int) ($user['userid'] ?? 0),
+            'username' => (string) ($user['username'] ?? ''),
+            'host' => Utility::gethostname(),
+            'logtime' => NeoLogUtility::formatDate(),
+            'line' => NeoLogUtility::getLine(),
+        ];
 
         return $record;
+    }
+}
+/**
+ * Class NeoLogStreamProcessor
+ */
+class NeoLogStreamProcessor extends NeoLogProcessor
+{
+    /**
+     * @param LogRecord $record
+     *
+     * @return array
+     */
+    public function __invoke(LogRecord $record)
+    {
+        return $this->more($record);
     }
 }
 

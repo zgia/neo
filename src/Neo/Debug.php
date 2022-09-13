@@ -43,9 +43,17 @@ class Debug
      */
     public static function getTraces(int $index = 0, int $limit = 0)
     {
-        $backtraces = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, $limit);
+        // debug_backtrace() - show all options
+        // debug_backtrace(0) - exclude ["object"]
+        // debug_backtrace(1) - same as debug_backtrace()
+        // debug_backtrace(2) - exclude ["object"] AND ["args"]
+        $backtraces = debug_backtrace(0, $limit);
 
-        foreach ($backtraces as &$trace) {
+        foreach ($backtraces as $key => &$trace) {
+            if(stripos($trace['file'], '/vendor/')!==false){
+                unset($backtraces[$key]);
+                continue;
+            }
             if (is_array($trace['args'])) {
                 foreach ($trace['args'] as &$arg) {
                     if (is_object($arg)) {
@@ -90,7 +98,7 @@ class Debug
      */
     public static function traceToString(array $trace)
     {
-        $func = $trace['class'] . $trace['type'] . $trace['function'];
+        $func = ($trace['class'] ?? '') . ($trace['type'] ?? '') . $trace['function'];
 
         return removeSysPath("{$trace['file']}({$trace['line']}): {$func}(" . implode(
             ', ',

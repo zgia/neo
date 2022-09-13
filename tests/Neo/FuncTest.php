@@ -1,6 +1,7 @@
 <?php
 
 use Neo\Http\Request;
+use Neo\NeoLog;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
 /**
@@ -27,6 +28,13 @@ class FuncTest extends BaseTester
 
         $this->assertEquals(get_class($req),'Neo\Http\Request');
         $this->assertEquals(neo()->getRequest()->isAjax(), true);
+    }
+
+    public function testNeoLog()
+    {
+        NeoLog::error('test', 'this is a log');
+
+        $this->assertEquals(1, true);
     }
 
 }

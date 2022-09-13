@@ -180,6 +180,9 @@ class Redis implements CacheInterface
      */
     public static function addServer(array $configs)
     {
+        if(empty($configs)){
+            throw new RedisException('Invalid Redis config.');
+        }
         foreach ($configs as $serverName => $config) {
             if (! isset(self::$_instance[$serverName])) {
                 try {
