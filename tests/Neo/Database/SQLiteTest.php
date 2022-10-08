@@ -41,10 +41,14 @@ class SQLiteTest extends BaseTester
 
     public function testShowCreateTable()
     {
-        $table = $this->db->describe('Chat_015ad63bfa51b4eb9f8f7d4f4507a051');
+        $table = $this->db->showCreateTable('test');
+        $table = preg_replace(["/[\r|\n]/im", "/\s+/"], ['',' '], trim($table));
+        $ctsql = 'CREATE TABLE "test" ( "id" INTEGER UNIQUE, "userid" INTEGER NOT NULL DEFAULT 0, "username" TEXT, PRIMARY KEY("id" AUTOINCREMENT))';
 
-        //$this->assertEquals(md5($table), '5e9e33f35adfd56f06766c2002e2309b');
+        $this->assertEquals($table, $ctsql);
 
+        $table = $this->db->describe('test');
+        x($table);
     }
 
     public function testDatabasePlatform()

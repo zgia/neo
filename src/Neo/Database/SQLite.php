@@ -48,6 +48,9 @@ class SQLite extends PDO
      */
     public function showCreateTable(string $table)
     {
-        return $this->fetchOne('SELECT sql FROM sqlite_schema WHERE name = ' . $this->quote($this->stripTags($table)));
+        $this->clearBinds();
+        $this->bindValue($this->stripTags($table));
+
+        return $this->fetchOne('SELECT sql FROM sqlite_schema WHERE name = ?');
     }
 }

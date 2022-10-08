@@ -40,12 +40,13 @@ $NEO_CONFIG['database'] = [
     'sqlite' => [
         'driver' => 'pdo_sqlite',
         'prefix' => '',
-        'url' => 'sqlite:////Users/zgia/Desktop/wx/msg.db',
+        'url' => 'sqlite:///' . ABS_PATH . '/sqlite_test.db',
         'logger' => \Neo\Database\Logger::class,
     ],
 ];
 
 define('MYSQL_CONFIG', $NEO_CONFIG['database']['mysql']);
+define('SQLITE_CONFIG', $NEO_CONFIG['database']['sqlite']);
 
 /*
  * 文件日志级别

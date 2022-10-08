@@ -3,7 +3,6 @@
 namespace Neo\Database;
 
 use Doctrine\DBAL\Connection as DoctrineConnection;
-use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Driver\ResultStatement;
 use Doctrine\DBAL\ParameterType;
 use Neo\NeoLog;
@@ -304,19 +303,19 @@ abstract class AbstractDatabase
         }
 
         // 分区
-        $partition = $more['partition'] ? "PARTITION {$more['partition']}" : '';
+        $partition = empty($more['partition']) ? '' : "PARTITION {$more['partition']}";
 
         // WHERE 字句
         $where = $conditions ? $this->where($conditions) : '';
 
         // GROUP BY 字句
-        $groupby = $more['groupby'] ? "GROUP BY {$more['groupby']}" : '';
+        $groupby = empty($more['groupby']) ? '' : "GROUP BY {$more['groupby']}";
 
         // HAVING 字句
-        $having = $more['having'] ? "HAVING {$more['having']}" : '';
+        $having = empty($more['having']) ? '' : "HAVING {$more['having']}";
 
         // ORDER BY 字句
-        $orderby = $more['orderby'] ? "ORDER BY {$more['orderby']}" : '';
+        $orderby = empty($more['orderby']) ? '' : "ORDER BY {$more['orderby']}";
 
         // LIMIT 字句
         $limit = '';
@@ -624,7 +623,8 @@ abstract class AbstractDatabase
             '\s+NOT LIKE',      // NOT LIKE 'expr'
         ];
 
-        return preg_match('/' . implode('|', $_operators) . '/i', $str, $match) ? trim($match[0]) : false;
+        $matches = [];
+        return preg_match('/' . implode('|', $_operators) . '/i', $sql, $matches) ? trim($matches[0]) : false;
     }
 
     /**

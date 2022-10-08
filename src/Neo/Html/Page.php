@@ -121,7 +121,7 @@ class Page
         $heading = '404 Page Not Found';
         $message = 'The page you requested was not found.';
 
-        Page::neoDie($message, $heading, [], 404);
+        static::neoDie($message, $heading, [], 404);
     }
 
     /**
@@ -230,7 +230,6 @@ class Page
      */
     public static function colorConsoleText($text, $fgColor = 'default', $bgColor = 'default')
     {
-        // 文字颜色
         $foregroundColors = [
             'black' => ['set' => 30, 'unset' => 39],
             'red' => ['set' => 31, 'unset' => 39],
@@ -243,7 +242,6 @@ class Page
             'default' => ['set' => 39, 'unset' => 39],
         ];
 
-        // 文字颜色
         $backgroundColors = [
             'black' => ['set' => 40, 'unset' => 49],
             'red' => ['set' => 41, 'unset' => 49],
