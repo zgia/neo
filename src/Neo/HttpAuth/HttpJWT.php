@@ -3,6 +3,7 @@
 namespace Neo\HttpAuth;
 
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use Neo\Exception\LogicException;
 use Neo\NeoLog;
 
@@ -99,8 +100,7 @@ class HttpJWT extends Auth implements AuthInterface
         try {
             $authed = JWT::decode(
                 $jwt,
-                $this->secretKey,
-                [$this->algorithm]
+                new Key($this->secretKey, $this->algorithm)
             );
 
             $this->data = ['userId' => $authed->uid, 'userName' => $authed->unm, 'exp' => $authed->exp];
