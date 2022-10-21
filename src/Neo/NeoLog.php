@@ -387,24 +387,12 @@ class NeoLogUtility
      */
     public static function getTraces()
     {
-        $traces = Debug::getTraces(0, 9);
-
-        // 是否使用路由
-        $routing = false;
-        foreach ($traces as $trace) {
-            if (stripos($trace['file'], 'Route.php') !== false) {
-                $routing = true;
-                break;
-            }
-        }
+        $traces = Debug::getTraces();
 
         // 调用入口
-        static::$line = Debug::traceToString($trace);
+        static::$line = Debug::traceToString($traces[count($traces)-1]);
 
-        // 4 表示移除NeoLog中的调用路径
-        // 8 表示移除初始化到加载控制器的通用加载路径(4步)，加上NeoLog调用路径(4步)
-        // 没有通过路由的，则不移除
-        return array_slice($traces, 4, $routing ? count($traces) - 8 : null);
+        return $traces;
     }
 
     /**

@@ -50,10 +50,6 @@ class Debug
         $backtraces = debug_backtrace(0, $limit);
 
         foreach ($backtraces as $key => &$trace) {
-            if(stripos($trace['file'], '/vendor/')!==false){
-                unset($backtraces[$key]);
-                continue;
-            }
             if (is_array($trace['args'])) {
                 foreach ($trace['args'] as &$arg) {
                     if (is_object($arg)) {
@@ -162,23 +158,20 @@ class Debug
         // 异步请求不返回调用栈
         $neo = neo();
         if ($neo->getRequest()->isAjax()) {
-            $_dump = (array) $neo->_dump;
-            $_dump[] = $args;
-            $neo->_dump = $_dump;
+            $neo->_dump = $args;
 
             return;
+        }
+
+        $hr = PHP_EOL . '-------------------------' . PHP_EOL;
+        $infos = 'Time: ' . formatLongDate() . $hr;
+        foreach ($args as $arg) {
+            $infos .= '|==> ' . ($var_dump ? var_dump($arg) : print_r($arg, true)) . PHP_EOL;
         }
 
         $traces = [];
         if ($addtrace) {
             $traces = static::getTracesAsString(array_slice(static::getTraces(), 2));
-        }
-
-        $hr = PHP_EOL . '-------------------------' . PHP_EOL;
-
-        $infos = 'Time: ' . formatLongDate() . $hr;
-        foreach ($args as $arg) {
-            $infos .= '|==> ' . ($var_dump ? var_dump($arg) : print_r($arg, true)) . PHP_EOL;
         }
 
         if (Utility::isCli()) {

@@ -526,7 +526,7 @@ function x(...$args)
 
     $_dump = neo()->_dump;
     if ($_dump) {
-        echo json_encode(['code' => 0, '_dump_' => $_dump]);
+        echo json_encode(['code' => 0, 'msg' => 'x', 'data' => $_dump]);
     }
 
     exit();

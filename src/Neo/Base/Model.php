@@ -258,26 +258,28 @@ class Model extends NeoBase
     /**
      * 获取自增表的最新一条数据
      *
+     * @param  array $conditions
      * @return array
      */
-    public function latest()
+    public function latest(array $conditions = [])
     {
-        return $this->row([], ['orderby' => "{$this->tableid} DESC"]);
+        return $this->row($conditions, ['orderby' => "{$this->tableid} DESC"]);
     }
 
     /**
      * 获取表某个字段的最大值
      *
      * @param string $field
+     * @param array  $conditions
      *
      * @return string
      */
-    public function max(string $field = null)
+    public function max(string $field = null, array $conditions = [])
     {
         $field || $field = $this->tableid;
 
         if ($field) {
-            return (string) $this->one([], ['field' => "MAX({$field})"]);
+            return (string) $this->one($conditions, ['field' => "MAX({$field})"]);
         }
 
         return null;
