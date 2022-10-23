@@ -462,7 +462,7 @@ class NeoLogProcessor
     {
         $user = neo()->getUser();
         $record->extra = [
-            'userid' => (int) ($user['userid'] ?? 0),
+            'userid' => (int) ($user['id'] ?? 0),
             'username' => (string) ($user['username'] ?? ''),
             'host' => Utility::gethostname(),
             'logtime' => NeoLogUtility::formatDate(),

@@ -61,7 +61,7 @@ class Model extends NeoBase
 
         // 缺省主键，如果主键不是表名+ID，请务必指定主键名称
         if (! $this->tableid) {
-            $this->tableid = $this->table . 'id';
+            $this->tableid = 'id';
         }
     }
 

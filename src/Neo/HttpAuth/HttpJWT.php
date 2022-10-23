@@ -103,7 +103,7 @@ class HttpJWT extends Auth implements AuthInterface
                 new Key($this->secretKey, $this->algorithm)
             );
 
-            $this->data = ['userId' => $authed->uid, 'userName' => $authed->unm, 'exp' => $authed->exp];
+            $this->data = ['uid' => $authed->uid, 'uname' => $authed->unm, 'exp' => $authed->exp];
         } catch (\Exception $ex) {
             throw new LogicException($ex->getMessage(), 401, $ex);
         }

@@ -35,7 +35,7 @@ class BaseTester extends TestCase
     }
 
     public function testUser(){
-        $user = $this->db->fetchRow('select * from user where userid = 1');
+        $user = $this->db->fetchRow('select * from user where id = 1');
         $this->assertEquals('zgia', $user['username']);
 
         $account = $this->db->fetchOne('select count(*) from user');
