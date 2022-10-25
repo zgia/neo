@@ -142,23 +142,17 @@ class Debug
             return;
         }
 
-        $addtrace = false;
+        $traces = [];
         if ($args[0] == '__add_trace__') {
             array_shift($args);
-            $addtrace = true;
-        }
 
-        // 详细的变量信息
-        $var_dump = false;
-        if ($args[0] == '__var_dump__') {
-            array_shift($args);
-            $var_dump = true;
+            $traces = static::getTracesAsString(array_slice(static::getTraces(), 2));
         }
 
         // 异步请求不返回调用栈
         $neo = neo();
         if ($neo->getRequest()->isAjax()) {
-            $neo->_dump = $args;
+            $neo->_dump = $args+$traces;
 
             return;
         }
@@ -166,12 +160,7 @@ class Debug
         $hr = PHP_EOL . '-------------------------' . PHP_EOL;
         $infos = 'Time: ' . formatLongDate() . $hr;
         foreach ($args as $arg) {
-            $infos .= '|==> ' . ($var_dump ? var_dump($arg) : print_r($arg, true)) . PHP_EOL;
-        }
-
-        $traces = [];
-        if ($addtrace) {
-            $traces = static::getTracesAsString(array_slice(static::getTraces(), 2));
+            $infos .= '|==> ' . print_r($arg, true) . PHP_EOL;
         }
 
         if (Utility::isCli()) {
@@ -186,7 +175,7 @@ class Debug
 
             echo '<pre class="dump">', $infos, '</pre>';
 
-            if ($addtrace) {
+            if ($traces) {
                 echo '<pre class="dump"><ol><li>', implode('</li><li>', $traces), '</li></ol></pre>';
             }
         }

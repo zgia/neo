@@ -37,16 +37,17 @@ function db(bool $init = true)
  *
  * @param string $gpc       g:GET, p:POST, c:COOKIE, r:REQUEST, f:FILE
  * @param array  $variables
+ * @param bool   $merge     是否合并未处理的其他参数
  *
  * @return array
  */
-function input(string $gpc, array $variables)
+function input(string $gpc, array $variables, $merge = false)
 {
     $request = neo()->getRequest();
 
     $params = $request->cleanGPC($gpc, $variables);
 
-    return $request->mergeParams($params);
+    return $merge ? $request->mergeParams($params) : $params;
 }
 
 /**
