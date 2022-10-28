@@ -4,6 +4,7 @@ namespace Neo\Traiter;
 
 use GuzzleHttp\Client as GuzzleHttpClient;
 use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Psr7\Request;
 use Neo\Debug;
 use Neo\Exception\LogicException;
 use Neo\NeoLog;
@@ -71,7 +72,7 @@ trait GuzzleHttpClientTraiter
     protected function getGuzzleHttpClient()
     {
         if ($this->reload || $this->httpClient == null) {
-            $this->httpClient = new GuzzleHttpClient();
+            $this->httpClient = new GuzzleHttpClient(['timeout' => $this->timeout]);
 
             $this->reload = false;
         }
@@ -84,35 +85,43 @@ trait GuzzleHttpClientTraiter
      *
      * @param string $url
      * @param array  $params
-     * @param bool   $origin 返回数据是否需要json_decode
+     * @param bool   $origin  返回数据是否需要json_decode
+     * @param array  $options
      *
      * @throws LogicException
      * @return null|mixed
      */
-    public function post(string $url, array $params = [], bool $origin = false)
+    public function post(string $url, array $params = [], array $options = [], bool $origin = false)
     {
-        return $this->httpClient('post', $url, $params, $origin);
+        if ($params) {
+            $options['form_params'] = $params;
+        }
+        return $this->doRequest('post', $url, $options, $origin);
     }
 
     /**
      * GET
      *
      * @param string $url
-     * @param array  $query
-     * @param bool   $origin 返回数据是否需要json_decode
+     * @param array  $params
+     * @param array  $options
+     * @param bool   $origin  返回数据是否需要json_decode
      *
      * @throws LogicException
      * @return null|mixed
      */
-    public function get(string $url, array $query = [], bool $origin = false)
+    public function get(string $url, array $params = [], array $options = [], bool $origin = false)
     {
-        return $this->httpClient('get', $url, $query, $origin);
+        if ($params) {
+            $options['query'] = $params;
+        }
+        return $this->doRequest('get', $url, $options, $origin);
     }
 
     /**
      * 发起HTTP请求
      *
-     * @param string            $verb    POST, GET, DELETE, etc
+     * @param string            $method  POST, GET, DELETE, etc
      * @param string            $url     URL
      * @param array             $options More options
      * @param bool              $origin  返回数据是否需要json_decode
@@ -121,23 +130,21 @@ trait GuzzleHttpClientTraiter
      * @throws LogicException
      * @return null|array|string
      */
-    public function httpClient(string $verb, string $url, array $options = [], bool $origin = false, ResponseInterface &$result = null)
+    public function doRequest(string $method, string $url, array $options = [], bool $origin = false, ResponseInterface &$result = null)
     {
-        $options['timeout'] || $options['timeout'] = $this->timeout;
-
         $response = null;
         try {
+            $request = new Request($method, $url);
+
             /**
              * @var ResponseInterface $result
              */
-            $result = $this->getGuzzleHttpClient()
-                ->{$verb}($url, $options);
+            $result = $this->getGuzzleHttpClient()->send($request, $options);
 
-            $response = $result->getBody()
-                ->getContents();
+            $response = $result->getBody()->getContents();
 
             return $origin ? $response : json_decode($response, true);
-        } catch (RequestException | \Exception $ex) {
+        } catch (RequestException|\Exception $ex) {
             throw $this->log($ex);
         }
     }

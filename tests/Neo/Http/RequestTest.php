@@ -1,7 +1,6 @@
 <?php
 
-use Neo\Http\Request;
-use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
+use Neo\Traiter\GuzzleHttpClientTraiter;
 
 /**
  * @backupGlobals disabled
@@ -11,6 +10,8 @@ use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
  */
 class RequestTest extends BaseTester
 {
+    use GuzzleHttpClientTraiter;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -20,8 +21,7 @@ class RequestTest extends BaseTester
     {
         $req = neo()->getRequest();
 
-        $this->assertEquals(get_class($req),'Neo\Http\Request');
-        $this->assertEquals(get_parent_class($req),'Symfony\Component\HttpFoundation\Request');
+        $this->assertEquals(get_class($req), 'Neo\Http\Request');
+        $this->assertEquals(get_parent_class($req), 'Symfony\Component\HttpFoundation\Request');
     }
-
 }

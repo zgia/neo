@@ -1,8 +1,6 @@
 <?php
 
-use Neo\Http\Request;
 use Neo\NeoLog;
-use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
 /**
  * @backupGlobals disabled
@@ -24,9 +22,9 @@ class FuncTest extends BaseTester
 
         dump('dasdas');
         dump('yrtrew');
-        x(423,342423);
+        x(423, 342423);
 
-        $this->assertEquals(get_class($req),'Neo\Http\Request');
+        $this->assertEquals(get_class($req), 'Neo\Http\Request');
         $this->assertEquals(neo()->getRequest()->isAjax(), true);
     }
 
@@ -36,5 +34,4 @@ class FuncTest extends BaseTester
 
         $this->assertEquals(1, true);
     }
-
 }
