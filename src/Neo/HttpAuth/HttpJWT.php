@@ -4,6 +4,7 @@ namespace Neo\HttpAuth;
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use Neo\Exception\AuthException;
 use Neo\Exception\LogicException;
 use Neo\NeoLog;
 
@@ -70,10 +71,10 @@ class HttpJWT extends Auth implements AuthInterface
 
         try {
             $authed = $this->auth($authorization);
-        } catch (\Exception $ex) {
+        } catch (\Throwable $ex) {
             NeoLog::error('auth', __FUNCTION__, [neo()->getRequest()->neoServer('authorization'), $ex->getMessage()]);
 
-            $this->unauth();
+            throw new AuthException($ex->getMessage(), $ex->getCode(), $ex);
         }
 
         return $authed;
@@ -104,7 +105,7 @@ class HttpJWT extends Auth implements AuthInterface
             );
 
             $this->data = ['uid' => $authed->uid, 'uname' => $authed->unm, 'exp' => $authed->exp];
-        } catch (\Exception $ex) {
+        } catch (\Throwable $ex) {
             throw new LogicException($ex->getMessage(), 401, $ex);
         }
 

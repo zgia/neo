@@ -2,6 +2,7 @@
 
 namespace Neo\HttpAuth;
 
+use Neo\Exception\AuthException;
 use Neo\Exception\LogicException;
 
 /**
@@ -9,7 +10,7 @@ use Neo\Exception\LogicException;
  */
 class HttpDigest extends Auth implements AuthInterface
 {
-    const REST_REALM = 'Neo Rest API';
+    public const REST_REALM = 'Neo Rest API';
 
     private $validUsers = ['neo' => 'hdsGh3j9a92'];
 
@@ -37,14 +38,16 @@ class HttpDigest extends Auth implements AuthInterface
      */
     public function authenticate(string $authorization = '', array $params = [])
     {
-        //[HTTP_AUTHORIZATION] => Digest username="neo", realm="Neo Rest API", nonce="5667eaa09eb15", uri="/api/xxxx/xxxxx/", cnonce="ODUzOWFkDVhYzEyMzc=", nc=00000001, qop=auth, response="c5b809db146316fe4071de307a4e69a8", opaque="f5837d57b1ded009f166a468773813d1"
+        // [HTTP_AUTHORIZATION] => Digest username="neo", realm="Neo Rest API", nonce="5667eaa09eb15", uri="/api/xxxx/xxxxx/", cnonce="ODUzOWFkDVhYzEyMzc=", nc=00000001, qop=auth, response="c5b809db146316fe4071de307a4e69a8", opaque="f5837d57b1ded009f166a468773813d1"
 
         $authed = false;
 
         try {
             $authed = $this->auth();
-        } catch (LogicException $ex) {
-            $this->_forceLogin($ex->getMessage(), $ex->getCode());
+        } catch (\Throwable $ex) {
+            $this->forceLogin($ex->getMessage(), $ex->getCode());
+
+            throw new AuthException($ex->getMessage(), $ex->getCode(), $ex);
         }
 
         return $authed;
@@ -106,12 +109,10 @@ class HttpDigest extends Auth implements AuthInterface
      * @param string $nonce
      * @param int    $code
      */
-    private function _forceLogin($nonce = '', $code = 0)
+    private function forceLogin($nonce = '', $code = 0)
     {
         if ($code == 100) {
             header('WWW-Authenticate: Digest realm="' . static::REST_REALM . '", qop="auth", nonce="' . $nonce . '", opaque="' . md5(static::REST_REALM) . '"');
         }
-
-        $this->unauth();
     }
 }

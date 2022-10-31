@@ -2,8 +2,8 @@
 
 namespace Neo\HttpAuth;
 
+use Neo\Exception\AuthException;
 use Neo\Exception\LogicException;
-use Neo\NeoLog;
 
 /**
  * HTTP WSSE 验证
@@ -39,8 +39,8 @@ class HttpWsse extends Auth implements AuthInterface
                 $userToken['nonce'],
                 $userToken['created']
             );
-        } catch (LogicException $ex) {
-            NeoLog::error('auth', 'httpwsse', $ex);
+        } catch (\Throwable $ex) {
+            throw new AuthException($ex->getMessage(), $ex->getCode(), $ex);
         }
 
         return $authed;
