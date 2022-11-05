@@ -116,8 +116,16 @@ class Neo implements \ArrayAccess
     private static $instance;
 
     /**
+     * 服务运行模式: 作为api，web还是cli方式提供服务
+     *
+     * @var string
+     */
+    private static string $serverMode = 'api';
+
+    /**
      * Neo constructor.
      *
+     * @param string        $serverType
      * @param null|callable $exceptionHandler
      */
     public function __construct(callable $exceptionHandler = null)
@@ -152,6 +160,26 @@ class Neo implements \ArrayAccess
     }
 
     /**
+     * 服务运行模式
+     *
+     * @return string
+     */
+    public static function getServerMode()
+    {
+        return static::$serverMode;
+    }
+
+    /**
+     * 服务运行模式
+     *
+     * @param string $mode
+     */
+    public static function setServerMode(string $mode)
+    {
+        static::$serverMode = $mode;
+    }
+
+    /**
      * 错误处理
      *
      * @param int    $severity Error number
@@ -172,8 +200,6 @@ class Neo implements \ArrayAccess
             throw new \ErrorException($errstr, 0, $severity, $errfile, $errline);
         }
 
-        @NeoLog::warning('warning', 'Warning', "{$errstr} in {$errfile} on line {$errline}");
-
         return true;
     }
 
@@ -184,8 +210,6 @@ class Neo implements \ArrayAccess
      */
     public function exceptionHandler(\Throwable $ex)
     {
-        @NeoLog::error('exceptionhandler', 'Exception', $ex);
-
         $host = Utility::gethostname();
 
         $errors = [];

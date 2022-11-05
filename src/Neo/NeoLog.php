@@ -140,7 +140,7 @@ class NeoLog
             }
 
             $logger->{$action}($message, $context);
-        } catch (\Exception $ex) {
+        } catch (\Throwable $ex) {
             $args = Debug::simplifyException($ex);
             $args['log'] = [
                 'action' => $action,

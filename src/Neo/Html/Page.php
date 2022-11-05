@@ -4,8 +4,8 @@ namespace Neo\Html;
 
 use Neo\Config;
 use Neo\Http\Cookie;
+use Neo\Neo;
 use Neo\Str;
-use Neo\Utility;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 
 /**
@@ -140,7 +140,7 @@ class Page
     ) {
         $message = (string) $message;
 
-        if (Utility::isCli()) {
+        if (Neo::getServerMode() == 'cli') {
             $msg = $message . PHP_EOL . PHP_EOL;
 
             foreach ($more as $k => $v) {
@@ -150,7 +150,7 @@ class Page
             }
 
             byebye($statusCode, static::colorConsoleText($msg . PHP_EOL, 'green', 'red'));
-        } elseif (neo()->getRequest()->isAjax()) {
+        } elseif (Neo::getServerMode() == 'api') {
             printOutJSON(['code' => 1, 'msg' => $message, 'data' => $more], $statusCode);
         } else {
             static::displaySimpleErrorPage(
