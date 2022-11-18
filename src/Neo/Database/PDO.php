@@ -262,11 +262,9 @@ class PDO extends AbstractDatabase implements DatabaseInterface
         $this->clearBinds();
 
         try {
-            $table = $this->tableName($table);
+            $sql = 'DELETE FROM ' . $this->tableName($table) . $this->where($conditions);
 
-            $this->sql = 'DELETE FROM ' . $table . $this->where($conditions);
-
-            return $this->connection->delete($table, $conditions, $this->getBindTypes());
+            return $this->write($sql);
         } catch (\Throwable $ex) {
             $this->halt($ex);
         }
