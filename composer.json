@@ -16,7 +16,7 @@
   "require": {
     "doctrine/dbal": "^2.9",
     "zgia/neo-utility": "^0.1",
-    "monolog/monolog": "^3.2",
+    "monolog/monolog": "^3.0",
     "firebase/php-jwt": "^6.3",
     "nesbot/carbon": "^2.61",
     "spatie/array-to-xml": "^3.1",
