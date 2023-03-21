@@ -29,7 +29,7 @@ class NeoLog
     /**
      * @var array
      */
-    private $fileHandler;
+    private array $fileHandler = [];
 
     /**
      * @var StreamHandler
@@ -259,7 +259,7 @@ class NeoLog
             $type = $fileCfg['typename'] ?? 'neo';
         }
 
-        if ($this->fileHandler[$type]) {
+        if (array_key_exists($type, $this->fileHandler) && $this->fileHandler[$type]) {
             return $this->fileHandler[$type];
         }
 
@@ -428,21 +428,17 @@ class NeoLogUtility
     }
 
     /**
-     * 文件日志级别
+     * 日志级别
+     * 
+     * DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, ALERT, EMERGENCY
+     * 
+     * @see \Psr\Log\LogLevel
      *
-     * @return int
+     * @return string
      */
     public static function getLogLevel()
     {
-        // DEBUG = 100;
-        // INFO = 200;
-        // NOTICE = 250;
-        // WARNING = 300;
-        // ERROR = 400;
-        // CRITICAL = 500;
-        // ALERT = 550;
-        // EMERGENCY = 600;
-        return (int) Config::get('logger', 'level', 300);
+        return (string) Config::get('logger', 'level', 'INFO');
     }
 }
 
