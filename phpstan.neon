@@ -1,0 +1,21 @@
+parameters:
+	paths:
+		- src
+	level: 6
+	errorFormat: table
+	ignoreErrors:
+		- "#\\(void\\) is used#"
+		- "#Access to an undefined property#"
+		- "#Call to an undefined method#"
+		- "#but return statement is missing.#"
+		- "#Caught class [a-zA-Z0-9\\\\_]+ not found.#"
+		- "#Class [a-zA-Z0-9\\\\_]+ not found.#"
+		- "#has invalid type#"
+		- "#should always throw an exception or terminate script execution#"
+		- "#Instantiated class [a-zA-Z0-9\\\\_]+ not found.#"
+		- "#Unsafe usage of new static#"
+		- "#Property .* is never written, only read#"
+		-
+			identifier: missingType.generics
+	excludePaths:
+			- ./src/Neo/Html/error_page.php
