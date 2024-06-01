@@ -7,6 +7,7 @@ use Doctrine\DBAL\Connection as DoctrineConnection;
 use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Driver\ResultStatement;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Logging\SQLLogger;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Doctrine\DBAL\SQLParserUtils;
@@ -101,7 +102,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     {
         $configuration = new Configuration();
 
-        if (! empty($params['logger'])) {
+        if (! empty($params['logger']) && empty($params['disable_logger'])) {
             if (class_exists($params['logger'])) {
                 $configuration->setSQLLogger(new $params['logger']());
             }
@@ -670,7 +671,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     /**
      * 获取日志处理
      *
-     * @return null|\Doctrine\DBAL\Logging\SQLLogger|Logger
+     * @return null|Logger|SQLLogger
      */
     public function getSQLLogger()
     {
@@ -694,11 +695,7 @@ class PDO extends AbstractDatabase implements DatabaseInterface
      */
     public function getQueryArray()
     {
-        if ($logger = $this->getSQLLogger()) {
-            return $logger->getQueries();
-        }
-
-        return [];
+        return $this->getSQLLogger()?->getQueries();
     }
 
     /**

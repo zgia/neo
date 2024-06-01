@@ -4,3 +4,4 @@ vendor/
 .idea/
 *.cache
 *.log
+.DS_Store

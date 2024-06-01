@@ -2,6 +2,8 @@
 
 namespace Neo;
 
+use Neo\Exception\NeoException;
+
 /**
  * 调试相关
  */
@@ -116,7 +118,7 @@ class Debug
         ];
 
         /**
-         * @var \Neo\Exception\NeoException $ex
+         * @var NeoException $ex
          */
         if (method_exists($ex, 'getMore') && $more = $ex->getMore()) {
             $data['more'] = $more;

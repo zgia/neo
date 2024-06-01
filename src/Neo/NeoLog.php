@@ -5,6 +5,7 @@ namespace Neo;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Formatter\LogstashFormatter;
+use Monolog\Handler\AbstractHandler;
 use Monolog\Handler\RedisHandler;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
@@ -31,7 +32,7 @@ class NeoLog
     /**
      * @var array<RotatingFileHandler>
      */
-    private array $fileHandlers;
+    private array $fileHandlers = [];
 
     private StreamHandler $streamHandler;
 
@@ -201,7 +202,7 @@ class NeoLog
      *
      * @param string $rediskey Redis key
      *
-     * @return \Monolog\Handler\AbstractHandler
+     * @return AbstractHandler
      */
     private function log2RedisWithLogstash(string $rediskey = 'neologstash')
     {
@@ -230,7 +231,7 @@ class NeoLog
      *
      * @param string $type 文件名
      *
-     * @return \Monolog\Handler\AbstractHandler
+     * @return AbstractHandler
      */
     private function log2File(string $type)
     {
@@ -274,7 +275,7 @@ class NeoLog
      *
      * @param string $type php://stderr
      *
-     * @return \Monolog\Handler\AbstractHandler
+     * @return AbstractHandler
      *
      * @throws \Exception
      */
@@ -429,10 +430,10 @@ class NeoLogUtility
 
     /**
      * 日志级别
-     * 
+     *
      * DEBUG, INFO, NOTICE, WARNING, ERROR, CRITICAL, ALERT, EMERGENCY
-     * 
-     * @see \Psr\Log\LogLevel
+     *
+     * @see LogLevel
      *
      * @return Level
      */

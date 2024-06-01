@@ -3,6 +3,7 @@
 namespace Neo\Database;
 
 use Doctrine\DBAL\Logging\DebugStack;
+use Neo\NeoLog;
 
 /**
  * Logger Class
@@ -32,12 +33,14 @@ class Logger extends DebugStack
     /**
      * {@inheritdoc}
      */
-    public function startQuery($sql, ?array $params = null, ?array $types = null)
+    public function stopQuery()
     {
-        if (count($this->queries) > 1000) {
-            // todo anything?
+        if (! $this->enabled) {
+            return;
         }
 
-        parent::startQuery($sql, $params, $types);
+        parent::stopQuery();
+
+        NeoLog::info('db', 'query', $this->queries[$this->currentQuery]);
     }
 }
