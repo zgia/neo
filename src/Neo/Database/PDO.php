@@ -276,6 +276,29 @@ class PDO extends AbstractDatabase implements DatabaseInterface
     }
 
     /**
+     * 执行一条SQL
+     *
+     * @param string $sql
+     * @param array  $binds
+     */
+    public function query(string $sql, array $binds = [])
+    {
+        $sql = trim($sql);
+
+        if ($binds) {
+            foreach ($binds as $bind) {
+                $this->bindValue($bind);
+            }
+        }
+
+        if (stripos($sql, 'select') === 0) {
+            return $this->read($sql)->fetchAllAssociative();
+        }
+
+        return $this->write($sql);
+    }
+
+    /**
      * 在主数据库上执行的"写"操作，比如：insert，update，delete等等
      *
      * @param string $sql        待执行的语句
