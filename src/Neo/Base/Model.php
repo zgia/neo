@@ -276,7 +276,7 @@ class Model extends NeoBase
      *
      * @return null|string
      */
-    public function max(string $field = null, array $conditions = [])
+    public function max(?string $field = null, array $conditions = [])
     {
         $field || $field = $this->tableid;
 
@@ -327,13 +327,14 @@ class Model extends NeoBase
     /**
      * 在主数据库上执行的"写"操作，比如：insert，update，delete等等
      *
-     * @param string $sql The text of the SQL query to be executed
+     * @param string $sql        The text of the SQL query to be executed
+     * @param bool   $clearBinds
      *
      * @return int
      */
-    public function write(string $sql)
+    public function write(string $sql, bool $clearBinds = true)
     {
-        return $this->db()->write($sql);
+        return $this->db()->write($sql, $clearBinds);
     }
 
     /**
